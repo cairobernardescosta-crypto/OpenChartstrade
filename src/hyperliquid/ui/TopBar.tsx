@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Button } from "../../components/ui/button.tsx";
 import { useFeeConfigStore } from "../feeConfig.ts";
 import { useHlSession } from "../session.ts";
 import { DepositPanel, Modal, SetupDialog } from "../onboarding/index.ts";
