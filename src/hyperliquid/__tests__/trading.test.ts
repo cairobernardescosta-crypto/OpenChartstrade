@@ -342,6 +342,22 @@ describe("placeOrder", () => {
     expect(exchange.order).toHaveBeenCalledTimes(2);
   });
 
+  it("does not deduplicate concurrent orders with different leverage or margin settings", async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => (release = r));
+    const order = vi.fn(async () => {
+      await gate;
+      return okOrder([filled()]);
+    });
+    const { exchange, make } = makeEnv({ exchange: { order } });
+    const t = make();
+    const a = t.placeOrder(input({ leverage: 10, isCross: false }));
+    const b = t.placeOrder(input({ leverage: 10, isCross: true }));
+    await vi.waitFor(() => expect(exchange.order).toHaveBeenCalledTimes(2));
+    release();
+    await Promise.all([a, b]);
+  });
+
   it("a double-click while in flight is one order, not two", async () => {
     let release: () => void = () => undefined;
     const gate = new Promise<void>((r) => (release = r));
