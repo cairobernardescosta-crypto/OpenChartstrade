@@ -3,7 +3,8 @@ import { ChevronLeft } from "lucide-react";
 import { MobileAccountBar, MobileTradingPanel } from "../components/MobileTradingPanel.tsx";
 import { NewsFeed as MarketNewsFeed } from "../components/TradingPowerFeatures.tsx";
 import { TradingViewTechnicalAnalysis } from "../components/TradingViewWidgets.tsx";
-import type { IndicatorType } from "../lib/indicators.ts";
+import { INDICATOR_REGISTRY, type IndicatorType } from "../lib/indicators.ts";
+import { useCandles } from "../services/queries.ts";
 import { useHoverCollapse } from "../hooks/useHoverCollapse.ts";
 import { safeStorage } from "../lib/safe-storage.ts";
 import type { PlaceOrderInput } from "../services/schemas.ts";
@@ -13,7 +14,8 @@ import { useTerminal } from "../terminal/use-terminal.ts";
 import { BottomPanel } from "./trading/BottomPanel.tsx";
 import { ChartPanel } from "./trading/ChartPanel.tsx";
 import { ChartToolbar } from "./trading/ChartToolbar.tsx";
-import { REPLAY_ENABLED } from "./trading/constants.ts";
+import { REPLAY_ENABLED, TIMEFRAMES, type DrawingLine, type DrawingTool, type Timeframe } from "./trading/constants.ts";
+import { getPipDigits } from "./trading/utils.ts";
 import { DOMPanel } from "./trading/DOMPanel.tsx";
 import { MarketClosedBanner } from "./trading/MarketClosedBanner.tsx";
 import { OrderPanel } from "./trading/OrderPanel.tsx";
@@ -95,6 +97,17 @@ export function TradingPage() {
   // ── Layout state ──
   const [showIndicatorMenu, setShowIndicatorMenu] = useState(false);
   const [chartLayout, setChartLayout] = useState<"single" | "split">("single");
+  // The secondary chart owns its market and indicator state. It starts on 1h
+  // so split mode is useful immediately for multi-timeframe analysis.
+  const [secondarySymbol, setSecondarySymbol] = useState(selectedSymbol);
+  const [secondaryTimeframe, setSecondaryTimeframe] = useState<Timeframe>("1h");
+  const [secondaryIndicators, setSecondaryIndicators] = useState<IndicatorType[]>([]);
+  const [secondaryDrawingTool, setSecondaryDrawingTool] = useState<DrawingTool>("none");
+  // The drawings API currently persists by symbol only. Keep this chart's
+  // drawings isolated in memory rather than merging them with the primary chart.
+  const [secondaryDrawings, setSecondaryDrawings] = useState<DrawingLine[]>([]);
+  const [secondaryPlugins, setSecondaryPlugins] = useState<string[]>([]);
+
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -184,6 +197,36 @@ export function TradingPage() {
     [activeIndicators, toggleIndicator],
   );
   const ticks = useTradingStore((s) => s.ticks);
+  const { data: secondaryCandles = [] } = useCandles(secondarySymbol, secondaryTimeframe, 400);
+  const secondaryTick = useTradingStore((s) => s.ticks[secondarySymbol]);
+  const secondaryLiveCandle = useTradingStore(
+    (s) => s.liveCandleUpdates[secondarySymbol + ":" + secondaryTimeframe],
+  );
+  const secondarySymbolInfo = symbols.find((symbol) => symbol.name === secondarySymbol);
+  const secondaryPipDigits = getPipDigits(secondarySymbolInfo, secondarySymbol);
+
+  const toggleSecondaryIndicator = useCallback((type: IndicatorType) => {
+    setSecondaryIndicators((prev) =>
+      prev.includes(type) ? prev.filter((item) => item !== type) : [...prev, type],
+    );
+  }, []);
+  const addSecondaryDrawing = useCallback((drawing: DrawingLine) => {
+    setSecondaryDrawings((prev) => [...prev, drawing]);
+  }, []);
+  const updateSecondaryDrawing = useCallback((drawing: DrawingLine) => {
+    setSecondaryDrawings((prev) => prev.map((item) => item.id === drawing.id ? drawing : item));
+  }, []);
+  const removeSecondaryDrawing = useCallback((id: string) => {
+    setSecondaryDrawings((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+  const toggleSecondaryPlugin = useCallback((id: string) => {
+    setSecondaryPlugins((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+    );
+  }, []);
+  const clearSecondaryDrawings = useCallback(() => setSecondaryDrawings([]), []);
+  const clearSecondaryIndicators = useCallback(() => setSecondaryIndicators([]), []);
+
 
   return (
 
@@ -284,41 +327,74 @@ export function TradingPage() {
             />
             </div>
             {chartLayout === "split" && (
-              <div className="min-w-0 min-h-0 relative overflow-hidden">
-            <ChartPanel key="secondary"
-              candles={replayCandles ?? candles ?? []}
-              selectedSymbol={selectedSymbol}
-              timeframe={replayCandles ? "1m" : timeframe}
-              isDark={isDark}
-              activeIndicators={activeIndicators}
-              drawingTool={drawingTool}
-              drawings={drawings}
-              onAddDrawing={addDrawing}
-              onUpdateDrawing={updateDrawing}
-              onRemoveDrawing={removeDrawing}
-              onDrawingComplete={() => setDrawingTool("none")}
-              onDrawingToolSelect={setDrawingTool}
-              onUndoDrawing={undoDrawing}
-              onRedoDrawing={redoDrawing}
-              magnetMode={chartPrefs.magnetMode}
-              stayInDrawingMode={chartPrefs.stayInDrawingMode}
-              positions={chartPositions}
-              orders={chartOrders}
-              tick={replayCandles ? undefined : tick}
-              liveCandle={replayCandles ? undefined : liveCandle}
-              pipDigits={pipDigits}
-              symbolInfo={symbolInfo}
-              onModifyPosition={handleChartModifyPosition}
-              replayTradeEvents={replayTradeEvents}
-              isReplaying={isReplaying}
-              activePlugins={activePlugins}
-              onTogglePlugin={handleTogglePlugin}
-              accountEquity={account?.equity ?? account?.balance ?? 0}
-              accountId={activeAccountId}
-              onQuickOrder={handleQuickOrder}
-              onClearDrawings={clearDrawings}
-              onClearIndicators={handleClearIndicators}
-            />
+              <div className="flex min-w-0 min-h-0 flex-col overflow-hidden bg-background">
+                <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border bg-card px-2 py-1">
+                  <select
+                    aria-label="Ativo do segundo gráfico"
+                    value={secondarySymbol}
+                    onChange={(event) => setSecondarySymbol(event.target.value)}
+                    className="max-w-32 rounded border border-border bg-background px-2 py-1 text-xs font-semibold"
+                  >
+                    {symbols.map((symbol) => (
+                      <option key={symbol.id || symbol.name} value={symbol.name}>{symbol.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    aria-label="Período do segundo gráfico"
+                    value={secondaryTimeframe}
+                    onChange={(event) => setSecondaryTimeframe(event.target.value as Timeframe)}
+                    className="rounded border border-border bg-background px-2 py-1 text-xs"
+                  >
+                    {TIMEFRAMES.map((tf) => <option key={tf} value={tf}>{tf}</option>)}
+                  </select>
+                  <div className="flex items-center gap-0.5">
+                    {INDICATOR_REGISTRY.map((indicator) => {
+                      const active = secondaryIndicators.includes(indicator.type);
+                      return (
+                        <button
+                          key={indicator.type}
+                          type="button"
+                          aria-pressed={active}
+                          title={indicator.label}
+                          onClick={() => toggleSecondaryIndicator(indicator.type)}
+                          className={active ? "rounded bg-primary/20 px-1.5 py-1 text-[10px] font-semibold text-primary" : "rounded px-1.5 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-secondary"}
+                        >
+                          {indicator.type}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="ml-auto shrink-0 text-[9px] text-muted-foreground">Sem ordens</span>
+                </div>
+                <div className="relative min-h-0 flex-1 overflow-hidden">
+                  <ChartPanel
+                    key="secondary"
+                    candles={secondaryCandles}
+                    selectedSymbol={secondarySymbol}
+                    timeframe={secondaryTimeframe}
+                    isDark={isDark}
+                    activeIndicators={secondaryIndicators}
+                    drawingTool={secondaryDrawingTool}
+                    drawings={secondaryDrawings}
+                    onAddDrawing={addSecondaryDrawing}
+                    onUpdateDrawing={updateSecondaryDrawing}
+                    onRemoveDrawing={removeSecondaryDrawing}
+                    onDrawingComplete={() => setSecondaryDrawingTool("none")}
+                    onDrawingToolSelect={setSecondaryDrawingTool}
+                    magnetMode={chartPrefs.magnetMode}
+                    stayInDrawingMode={chartPrefs.stayInDrawingMode}
+                    positions={[]}
+                    orders={[]}
+                    tick={secondaryTick}
+                    liveCandle={secondaryLiveCandle}
+                    pipDigits={secondaryPipDigits}
+                    symbolInfo={secondarySymbolInfo}
+                    activePlugins={secondaryPlugins}
+                    onTogglePlugin={toggleSecondaryPlugin}
+                    onClearDrawings={clearSecondaryDrawings}
+                    onClearIndicators={clearSecondaryIndicators}
+                  />
+                </div>
               </div>
             )}
           </div>
