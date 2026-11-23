@@ -16,7 +16,17 @@ export async function waitForTerminal(page: Page): Promise<void> {
   // OpenCharts brand is part of the current ChartToolbar and is a stable
   // visible marker that the terminal shell has mounted.
   await expect(page.getByText("OpenCharts", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Connect wallet|Wallet 0x/ }).first()).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /^(BTCUSD|BTC|ETH|xyz:[A-Z0-9]+)$/ }).filter({ visible: true }).first(),
+  ).toBeVisible();
+}
+
+/** Expand the right-side order panel before interacting with its wallet control. */
+export async function openOrderPanel(page: Page): Promise<void> {
+  await page.getByTitle("Order Panel").click();
+  await expect(
+    page.getByRole("button", { name: /^(Connect wallet|Wallet 0x)/ }).filter({ visible: true }).first(),
+  ).toBeVisible();
 }
 
 export async function openSymbolPicker(page: Page): Promise<void> {
@@ -33,7 +43,8 @@ export async function selectSymbol(page: Page, symbol: string): Promise<void> {
 
 /** Connect the fake wallet and walk the setup dialog to the end (agent + builder fee approved). */
 export async function connectAndSetup(page: Page, hl: Harness): Promise<void> {
-  await page.getByRole("button", { name: "Connect wallet" }).first().click();
+  await openOrderPanel(page);
+  await page.getByRole("button", { name: "Connect wallet" }).filter({ visible: true }).first().click();
   const dialog = page.getByRole("dialog", { name: "Set up trading" });
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: /^(Continue|Retry)$/ }).click();
