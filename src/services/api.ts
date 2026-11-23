@@ -218,9 +218,7 @@ export const api = {
   },
 
   getMarketDataHealth: () => {
-    const marketData = getAdapter().marketData as typeof getAdapter extends () => infer A
-      ? A extends { marketData: infer M } ? M & { getHealth?: () => unknown } : never
-      : never;
+    const marketData = getAdapter().marketData as unknown as { getHealth?: () => unknown };
     return Promise.resolve(marketData.getHealth?.() ?? { status: "ok" as const });
   },
 
