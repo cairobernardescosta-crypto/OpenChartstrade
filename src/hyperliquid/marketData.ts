@@ -200,11 +200,12 @@ export function createHyperliquidMarketData(
       if (coin.startsWith("@") || coin.startsWith("#")) continue;
       // The core frame also carries spot pairs ("PURR/USDC"); only listed perps get ticks.
       if (knownCoins.size > 0 ? !knownCoins.has(coin) : coin.includes("/")) continue;
-      // A symbol with a live book subscription already gets better ticks.
-      if (bboCoins.has(coin)) continue;
       const mid = Number(px);
       if (!Number.isFinite(mid) || mid <= 0) continue;
+      // Even when BBO is the displayed quote, a valid allMids frame proves this
+      // symbol is still being refreshed if its top of book has not changed.
       lastTickAt.set(coin, ts);
+      if (bboCoins.has(coin)) continue;
       if (lastMid.get(coin) === mid) continue;
       lastMid.set(coin, mid);
       emit({ type: "tick", symbol: coin, bid: mid, ask: mid, timestamp: ts });
