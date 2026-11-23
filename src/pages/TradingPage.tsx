@@ -585,7 +585,7 @@ export function TradingPage() {
               ask={tick?.ask}
               positions={positions || []}
               onPlaceOrder={(order) => {
-                if (oneClick) {
+                if (oneClick && order.type === "MARKET") {
                   void submitOrderDirect({
                     ...order,
                     accountId: activeAccountId!,
