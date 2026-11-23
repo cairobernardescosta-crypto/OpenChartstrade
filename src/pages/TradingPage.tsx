@@ -112,6 +112,9 @@ export function TradingPage() {
   });
   const resizingRef = useRef(false);
   const bottomPanelPointerInsideRef = useRef(false);
+  const bottomPanelFocusInsideRef = useRef(false);
+  const rightPanelPointerInsideRef = useRef(false);
+  const rightPanelFocusInsideRef = useRef(false);
   const resizeStartY = useRef(0);
   const resizeStartH = useRef(0);
 
@@ -140,7 +143,9 @@ export function TradingPage() {
         window.removeEventListener("mouseup", onUp);
         window.removeEventListener("touchmove", onMove);
         window.removeEventListener("touchend", onUp);
-        if (!bottomPanelPointerInsideRef.current) bottomPanelHover.onPointerLeave();
+        if (!bottomPanelPointerInsideRef.current && !bottomPanelFocusInsideRef.current) {
+          bottomPanelHover.onPointerLeave();
+        }
       };
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
@@ -270,16 +275,20 @@ export function TradingPage() {
             }}
             onMouseLeave={() => {
               bottomPanelPointerInsideRef.current = false;
-              if (!resizingRef.current) bottomPanelHover.onPointerLeave();
-            }}
-            onFocus={bottomPanelHover.onPointerEnter}
-            onBlur={(event) => {
-              if (
-                !event.currentTarget.contains(event.relatedTarget as Node | null) &&
-                !resizingRef.current &&
-                !bottomPanelPointerInsideRef.current
-              ) {
+              if (!resizingRef.current && !bottomPanelFocusInsideRef.current) {
                 bottomPanelHover.onPointerLeave();
+              }
+            }}
+            onFocus={() => {
+              bottomPanelFocusInsideRef.current = true;
+              bottomPanelHover.onPointerEnter();
+            }}
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                bottomPanelFocusInsideRef.current = false;
+                if (!resizingRef.current && !bottomPanelPointerInsideRef.current) {
+                  bottomPanelHover.onPointerLeave();
+                }
               }
             }}
             className="flex flex-col shrink-0"
@@ -330,12 +339,22 @@ export function TradingPage() {
           aria-label="Painel lateral retrátil"
           aria-expanded={showRightPanel && rightPanelHover.isExpanded}
           tabIndex={showRightPanel ? 0 : -1}
-          onMouseEnter={rightPanelHover.onPointerEnter}
-          onMouseLeave={rightPanelHover.onPointerLeave}
-          onFocus={rightPanelHover.onPointerEnter}
+          onMouseEnter={() => {
+            rightPanelPointerInsideRef.current = true;
+            rightPanelHover.onPointerEnter();
+          }}
+          onMouseLeave={() => {
+            rightPanelPointerInsideRef.current = false;
+            if (!rightPanelFocusInsideRef.current) rightPanelHover.onPointerLeave();
+          }}
+          onFocus={() => {
+            rightPanelFocusInsideRef.current = true;
+            rightPanelHover.onPointerEnter();
+          }}
           onBlur={(event) => {
             if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-              rightPanelHover.onPointerLeave();
+              rightPanelFocusInsideRef.current = false;
+              if (!rightPanelPointerInsideRef.current) rightPanelHover.onPointerLeave();
             }
           }}
           className={`relative hidden md:block shrink-0 overflow-hidden transition-[width] duration-[600ms] ease-out motion-reduce:transition-none ${
