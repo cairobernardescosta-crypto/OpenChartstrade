@@ -13,8 +13,8 @@ describe("wallet screening trading guard", () => {
     resetScreening();
   });
 
-  it("preserves trading when optional screening is not configured", () => {
-    expect(isAddressAllowedForTrading("0xabc")).toBe(true);
+  it("allows an unconfigured screener only in development", () => {
+    expect(isAddressAllowedForTrading("0xabc")).toBe(import.meta.env.DEV);
   });
 
   it("blocks trading until configured screening explicitly allows the wallet", async () => {
