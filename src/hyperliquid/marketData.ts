@@ -59,10 +59,18 @@ export interface HyperliquidMarketDataOptions {
   now?: () => number;
 }
 
+export interface HyperliquidMarketDataHealth {
+  adapter: { status: "available" | "unavailable"; reason?: string };
+  staleCount: number;
+  totalSymbols: number;
+  lastTickAgeMs: number;
+}
+
 export type HyperliquidMarketData = MarketDataSource & {
   registry: MarketRegistry;
   info: InfoClient;
   socket: HlSocket;
+  getHealth(): HyperliquidMarketDataHealth;
 };
 
 /** Map one raw HL candle to an OpenCharts candle (time in seconds). */
@@ -124,6 +132,8 @@ export function createHyperliquidMarketData(
   const bboCoins = new Set<string>();
   const candleKeys = new Set<string>();
   const lastMid = new Map<string, number>();
+  /** Local receipt time of the latest valid live frame for each tracked symbol. */
+  const lastTickAt = new Map<string, number>();
   /** Listed perp coins (refreshed on every reconcile); empty until the registry has loaded. */
   const knownCoins = new Set<string>();
 
@@ -149,6 +159,7 @@ export function createHyperliquidMarketData(
     const bid = Number(f.bbo[0]?.px);
     const ask = Number(f.bbo[1]?.px);
     if (!Number.isFinite(bid) || !Number.isFinite(ask) || bid <= 0 || ask <= 0) return;
+    lastTickAt.set(f.coin, now());
     emit({
       type: "tick",
       symbol: f.coin,
@@ -193,6 +204,7 @@ export function createHyperliquidMarketData(
       if (bboCoins.has(coin)) continue;
       const mid = Number(px);
       if (!Number.isFinite(mid) || mid <= 0) continue;
+      lastTickAt.set(coin, ts);
       if (lastMid.get(coin) === mid) continue;
       lastMid.set(coin, mid);
       emit({ type: "tick", symbol: coin, bid: mid, ask: mid, timestamp: ts });
@@ -455,6 +467,7 @@ export function createHyperliquidMarketData(
       bboCoins.clear();
       candleKeys.clear();
       lastMid.clear();
+      lastTickAt.clear();
       socket.disconnect();
     },
 
@@ -463,6 +476,28 @@ export function createHyperliquidMarketData(
     },
 
     getConnectionState: () => socket.getState(),
+
+    getHealth(): HyperliquidMarketDataHealth {
+      const state = socket.getState();
+      const tracked = [...new Set([...interest, ...[...chartKeys.values()].map((item) => item.symbol)])];
+      const ages = tracked
+        .map((symbol) => lastTickAt.get(symbol))
+        .filter((at): at is number => at !== undefined)
+        .map((at) => Math.max(0, now() - at));
+      const staleCount = tracked.filter((symbol) => {
+        const at = lastTickAt.get(symbol);
+        return at === undefined || now() - at > 30_000;
+      }).length;
+      return {
+        adapter: {
+          status: state === "connected" ? "available" : "unavailable",
+          ...(state === "connected" ? {} : { reason: `Hyperliquid feed is ${state}.` }),
+        },
+        staleCount,
+        totalSymbols: tracked.length,
+        lastTickAgeMs: ages.length > 0 ? Math.max(...ages) : -1,
+      };
+    },
 
     setSymbolInterest(symbols: string[]): void {
       interest = [...new Set(symbols)];
