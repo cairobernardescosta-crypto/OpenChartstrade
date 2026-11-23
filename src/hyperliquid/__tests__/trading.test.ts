@@ -353,9 +353,12 @@ describe("placeOrder", () => {
     const t = make();
     const a = t.placeOrder(input({ leverage: 10, isCross: false }));
     const b = t.placeOrder(input({ leverage: 10, isCross: true }));
-    await vi.waitFor(() => expect(exchange.order).toHaveBeenCalledTimes(2));
+    // ExchangeRunner serializes signed actions. Release the first order before
+    // waiting for the second one to reach the exchange.
+    await vi.waitFor(() => expect(exchange.order).toHaveBeenCalledTimes(1));
     release();
     await Promise.all([a, b]);
+    expect(exchange.order).toHaveBeenCalledTimes(2);
   });
 
   it("a double-click while in flight is one order, not two", async () => {
