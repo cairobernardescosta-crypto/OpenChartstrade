@@ -381,9 +381,9 @@ export function HlOrderPanel({
   let primary: React.ReactNode;
   if (status === "disconnected" || status === "connecting" || status === "error") {
     primary = (
-      <div className="[&>div]:w-full [&_button]:w-full" data-testid="connect-cta">
-        <ConnectButton />
-      </div>
+      <Button variant="outline" className="w-full" disabled>
+        Connect wallet above to enable trading
+      </Button>
     );
   } else if (status === "needs-agent" || status === "needs-builder-approval") {
     primary = (
@@ -410,7 +410,12 @@ export function HlOrderPanel({
   }
 
   return (
-    <div className="flex h-full flex-col" data-testid="order-form">
+    <div className="flex h-full min-h-0 flex-col" data-testid="order-form">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Wallet</span>
+        <ConnectButton />
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b border-border bg-secondary px-3 py-2">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">New Order</h3>
         <div className="flex items-center gap-2">
@@ -635,6 +640,7 @@ export function HlOrderPanel({
 
         {!isFeedConnected && <DisconnectedTradingBanner />}
         {primary}
+      </div>
       </div>
     </div>
   );

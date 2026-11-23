@@ -1,9 +1,7 @@
-import { Landmark } from "lucide-react";
 import type { ReactNode } from "react";
-import { Button } from "../../components/ui/button.tsx";
 import { useFeeConfigStore } from "../feeConfig.ts";
 import { useHlSession } from "../session.ts";
-import { AccountBadge, ConnectButton, DepositPanel, Modal, SetupDialog } from "../onboarding/index.ts";
+import { DepositPanel, Modal, SetupDialog } from "../onboarding/index.ts";
 import { getHlRegistry } from "./mode.ts";
 import { useHlUi } from "./uiStore.ts";
 
@@ -33,26 +31,14 @@ export function FeeMessageBanner() {
 }
 
 export function TopBar() {
-  const address = useHlSession((s) => s.address);
-  const openDeposit = useHlUi((s) => s.openDeposit);
   return (
     <header
-      className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 py-1.5"
+      className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-3 py-1.5"
       data-testid="hl-topbar"
     >
       <div className="flex items-center gap-2 text-sm font-semibold">
         <span>OpenCharts</span>
         <NetworkPill />
-      </div>
-      <div className="flex items-center gap-2">
-        {address && <AccountBadge className="text-xs md:hidden" />}
-        {address && (
-          <Button size="sm" variant="outline" onClick={openDeposit}>
-            <Landmark className="mr-1 h-3 w-3" aria-hidden />
-            Deposit
-          </Button>
-        )}
-        <ConnectButton />
       </div>
     </header>
   );
