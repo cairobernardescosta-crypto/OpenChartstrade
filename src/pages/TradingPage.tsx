@@ -297,9 +297,9 @@ export function TradingPage() {
       <MarketClosedBanner symbolInfo={symbolInfo} />
 
       {/* ── Main Layout ──────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+      <div className="relative flex flex-col md:flex-row flex-1 overflow-hidden">
         {/* Chart + Bottom Panel */}
-        <div className="flex flex-col flex-1 min-w-0">
+        <div className="relative flex flex-col flex-1 min-w-0">
           {/* Chart Area. Split mode initially mirrors the primary chart configuration. */}
           <div className={`flex-1 min-h-[200px] relative ${chartLayout === "split" ? "grid grid-cols-2 gap-px bg-border" : ""}`}>
             <div className={`min-w-0 min-h-0 h-full relative overflow-hidden ${activeChart === "primary" && chartLayout === "split" ? "ring-1 ring-inset ring-primary/50" : ""}`} onPointerDownCapture={() => setActiveChart("primary")}>
@@ -406,7 +406,7 @@ export function TradingPage() {
                 }
               }
             }}
-            className="flex flex-col shrink-0"
+            className="md:absolute md:inset-x-0 md:bottom-0 md:z-20 flex flex-col"
           >
             {/* ── Resize Handle ── */}
             <div
@@ -472,18 +472,18 @@ export function TradingPage() {
               if (!rightPanelPointerInsideRef.current) rightPanelHover.onPointerLeave();
             }
           }}
-          className={`relative hidden md:block shrink-0 overflow-hidden transition-[width] duration-[600ms] ease-out motion-reduce:transition-none ${
+          className={`absolute inset-y-0 right-0 z-30 hidden md:block w-[280px] xl:w-[320px] overflow-hidden transition-transform duration-[600ms] ease-out motion-reduce:transition-none ${
             !showRightPanel
-              ? "w-0"
+              ? "translate-x-full pointer-events-none"
               : rightPanelHover.isExpanded
-                ? "w-[280px] xl:w-[320px]"
-                : "w-3"
+                ? "translate-x-0"
+                : "translate-x-[calc(100%-12px)]"
           }`}
         >
           <div
             aria-hidden={!showRightPanel || !rightPanelHover.isExpanded}
             inert={!showRightPanel || !rightPanelHover.isExpanded}
-            className="absolute inset-y-0 right-0 flex w-[280px] xl:w-[320px] border-t md:border-t-0 md:border-l border-border flex-col bg-card overflow-hidden shrink-0 md:max-h-none"
+            className="absolute inset-y-0 right-0 flex w-full border-t md:border-t-0 md:border-l border-border flex-col bg-card overflow-hidden shrink-0 md:max-h-none"
           >
             {rightPanel === "order" && (
               <OrderPanel
