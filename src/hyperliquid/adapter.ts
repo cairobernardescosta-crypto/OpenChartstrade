@@ -4,7 +4,11 @@ import { isAddressAllowedForTrading } from "./compliance/screen.ts";
 import { isBuilderFeeApprovalError } from "./feeConfig.ts";
 import { isBuilderFeeUnapprovedError } from "./orders.ts";
 import { hlSession } from "./session.ts";
-import { createHyperliquidMarketData, type HyperliquidMarketDataOptions } from "./marketData.ts";
+import {
+  createHyperliquidMarketData,
+  HL_TICK_STALE_AFTER_MS,
+  type HyperliquidMarketDataOptions,
+} from "./marketData.ts";
 import { createHyperliquidTrading, type HyperliquidTradingOptions, type HyperliquidTrading } from "./trading.ts";
 import { HYPERLIQUID_ADAPTER_NAME } from "./ui/mode.ts";
 import { useHlUi } from "./ui/uiStore.ts";
@@ -112,14 +116,23 @@ export function guardBlockedAddress(
 export function guardLiveMarketData(
   trading: Pick<HyperliquidTrading, "placeOrder" | "modifyOrder">,
   getConnectionState: () => ConnectionState,
+  getHealth: (symbol?: string) => { adapter: { status: string }; staleCount: number; totalSymbols: number; lastTickAgeMs: number },
 ): void {
   const placeOrder = trading.placeOrder.bind(trading);
   const modifyOrder = trading.modifyOrder.bind(trading);
-  const requireLiveFeed = () =>
-    getConnectionState() === "connected" ? null : new Error(LIVE_FEED_REQUIRED_MESSAGE);
+  const requireLiveFeed = (symbol?: string) => {
+    const health = getHealth(symbol);
+    const connected = getConnectionState() === "connected" && health.adapter.status === "available";
+    const fresh =
+      health.totalSymbols > 0 &&
+      health.staleCount === 0 &&
+      health.lastTickAgeMs >= 0 &&
+      health.lastTickAgeMs <= HL_TICK_STALE_AFTER_MS;
+    return connected && fresh ? null : new Error(LIVE_FEED_REQUIRED_MESSAGE);
+  };
 
   trading.placeOrder = (input) => {
-    const error = requireLiveFeed();
+    const error = requireLiveFeed(input.symbol);
     return error ? Promise.reject(error) : placeOrder(input);
   };
   trading.modifyOrder = (id, mod) => {
@@ -148,7 +161,7 @@ export function createHyperliquidAdapter(
   const trading = createHyperliquidTrading({ ...opts.trading, registry: md.registry });
   guardBuilderFeeErrors(trading);
   guardBlockedAddress(trading);
-  guardLiveMarketData(trading, () => md.getConnectionState());
+  guardLiveMarketData(trading, () => md.getConnectionState(), (symbol) => md.getHealth(symbol));
 
   const marketData: OpenChartsAdapter["marketData"] = {
     ...md,
