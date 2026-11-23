@@ -23,6 +23,18 @@ describe("useHoverCollapse", () => {
     expect(result.current.isExpanded).toBe(true);
   });
 
+  it("keeps pointer callbacks stable after expansion state changes", () => {
+    const { result } = renderHook(() => useHoverCollapse());
+    const onPointerEnter = result.current.onPointerEnter;
+    const onPointerLeave = result.current.onPointerLeave;
+
+    act(() => onPointerEnter());
+    act(() => vi.advanceTimersByTime(600));
+
+    expect(result.current.isExpanded).toBe(true);
+    expect(result.current.onPointerEnter).toBe(onPointerEnter);
+    expect(result.current.onPointerLeave).toBe(onPointerLeave);
+  });
   it("cancels a pending open when the pointer leaves early", () => {
     const { result } = renderHook(() => useHoverCollapse());
 
