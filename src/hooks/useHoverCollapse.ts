@@ -36,7 +36,7 @@ export function useHoverCollapse() {
       isExpandedRef.current = true;
       setIsExpanded(true);
     }, HOVER_PANEL_OPEN_DELAY_MS);
-  }, [clearCloseTimer, isExpanded]);
+  }, [clearCloseTimer]);
 
   const onPointerLeave = useCallback(() => {
     clearOpenTimer();
@@ -48,7 +48,7 @@ export function useHoverCollapse() {
       isExpandedRef.current = false;
       setIsExpanded(false);
     }, HOVER_PANEL_CLOSE_DELAY_MS);
-  }, [clearCloseTimer, clearOpenTimer, isExpanded]);
+  }, [clearCloseTimer, clearOpenTimer]);
 
   useEffect(
     () => () => {
