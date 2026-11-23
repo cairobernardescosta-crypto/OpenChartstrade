@@ -44,6 +44,7 @@ describe("csp", () => {
 
   it("public/_headers matches the generated default (no drift)", () => {
     const body = publicHeaders
+      .replace(/\r\n/g, "\n")
       .split("\n")
       .filter((l) => !l.startsWith("#"))
       .join("\n");
