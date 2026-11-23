@@ -52,7 +52,7 @@ export function useHoverCollapse() {
       clearOpenTimer();
       clearCloseTimer();
     },
-    [clearCloseTimer, clearCloseTimer, clearOpenTimer],
+    [clearOpenTimer, clearCloseTimer],
   );
 
   return { isExpanded, onPointerEnter, onPointerLeave };
