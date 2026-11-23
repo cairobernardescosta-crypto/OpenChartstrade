@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   isAddressAllowedForTrading,
+  noopScreener,
   resetScreening,
   screenAddress,
   setAddressScreener,
@@ -8,7 +9,7 @@ import {
 
 describe("wallet screening trading guard", () => {
   beforeEach(() => {
-    setAddressScreener(undefined);
+    setAddressScreener(noopScreener);
     resetScreening();
   });
 
