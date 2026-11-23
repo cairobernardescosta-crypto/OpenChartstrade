@@ -261,6 +261,11 @@ export function TradingPage() {
         onSymbolChange={activeChart === "primary" ? setSelectedSymbol : setSecondarySymbol}
         timeframe={activeChart === "primary" ? timeframe : secondaryTimeframe}
         onTimeframeChange={activeChart === "primary" ? handleTimeframeChange : setSecondaryTimeframe}
+        chartLayout={chartLayout}
+        onChartLayoutChange={(layout) => {
+          if (layout === "single") setActiveChart("primary");
+          setChartLayout(layout);
+        }}
         activeIndicators={activeChart === "primary" ? activeIndicators : secondaryIndicators}
         onToggleIndicator={activeChart === "primary" ? toggleIndicator : toggleSecondaryIndicator}
         showIndicatorMenu={showIndicatorMenu}
@@ -288,12 +293,6 @@ export function TradingPage() {
           updateChartPreferences({ stayInDrawingMode: !chartPrefs.stayInDrawingMode })
         }
       />
-
-      <div className="flex items-center justify-end gap-1 px-2 py-1 border-b border-border bg-card">
-        <span className="mr-auto text-[10px] text-muted-foreground">Layout do gráfico</span>
-        <button type="button" aria-pressed={chartLayout === "single"} onClick={() => { setActiveChart("primary"); setChartLayout("single"); }} title="Um gráfico (Alt+1)" className={`rounded px-2 py-1 text-[11px] transition-colors ${chartLayout === "single" ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary"}`}>1 gráfico</button>
-        <button type="button" aria-pressed={chartLayout === "split"} onClick={() => setChartLayout("split")} title="Dois gráficos lado a lado (Alt+2)" className={`rounded px-2 py-1 text-[11px] transition-colors ${chartLayout === "split" ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary"}`}>2 gráficos</button>
-      </div>
 
       <MarketClosedBanner symbolInfo={symbolInfo} />
 

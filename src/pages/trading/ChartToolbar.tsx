@@ -9,6 +9,7 @@ import {
   CalendarDays,
   ChevronDown,
   Circle,
+  Columns2,
   Clock,
   Crosshair,
   Equal,
@@ -67,6 +68,8 @@ export interface ChartToolbarProps {
   onSymbolChange: (s: string) => void;
   timeframe: Timeframe;
   onTimeframeChange: (tf: Timeframe) => void;
+  chartLayout: "single" | "split";
+  onChartLayoutChange: (layout: "single" | "split") => void;
   activeIndicators: IndicatorType[];
   onToggleIndicator: (type: IndicatorType) => void;
   showIndicatorMenu: boolean;
@@ -112,6 +115,8 @@ export function ChartToolbar({
   onSymbolChange,
   timeframe,
   onTimeframeChange,
+  chartLayout,
+  onChartLayoutChange,
   activeIndicators,
   onToggleIndicator,
   showIndicatorMenu,
@@ -315,6 +320,40 @@ export function ChartToolbar({
             {tf}
           </button>
         ))}
+      </div>
+
+      {/* Chart layout controls — kept beside the timeframe selector. */}
+      <div className="flex items-center gap-0.5 ml-1 pl-2 border-l border-border shrink-0">
+        <button
+          type="button"
+          onClick={() => onChartLayoutChange("single")}
+          aria-pressed={chartLayout === "single"}
+          title="Um gráfico (Alt+1)"
+          className={cn(
+            "flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all",
+            chartLayout === "single"
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "hover:bg-secondary/80 text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Square className="h-3 w-3" />
+          1 gráfico
+        </button>
+        <button
+          type="button"
+          onClick={() => onChartLayoutChange("split")}
+          aria-pressed={chartLayout === "split"}
+          title="Dois gráficos lado a lado (Alt+2)"
+          className={cn(
+            "flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all",
+            chartLayout === "split"
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "hover:bg-secondary/80 text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Columns2 className="h-3 w-3" />
+          2 gráficos
+        </button>
       </div>
 
       {/* Session replay controls — disabled until the feature is QA'd */}
