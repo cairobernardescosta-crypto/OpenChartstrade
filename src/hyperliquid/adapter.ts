@@ -1,4 +1,4 @@
-import type { OpenChartsAdapter, StorageDriver } from "../adapter/types.ts";
+import type { ConnectionState, OpenChartsAdapter, StorageDriver } from "../adapter/types.ts";
 import { safeStorage } from "../lib/safe-storage.ts";
 import { isAddressAllowedForTrading } from "./compliance/screen.ts";
 import { isBuilderFeeApprovalError } from "./feeConfig.ts";
@@ -87,6 +87,9 @@ export function guardBuilderFeeErrors(trading: Pick<HyperliquidTrading, "placeOr
 export const BLOCKED_ADDRESS_MESSAGE =
   "Wallet screening has not approved this address yet. Wait for verification or contact support.";
 
+export const LIVE_FEED_REQUIRED_MESSAGE =
+  "Live Hyperliquid market data is disconnected. Reconnect the feed before placing or modifying orders.";
+
 /**
  * Refuse to submit or modify orders until configured address screening has
  * explicitly approved the connected wallet. This closes the async verification
@@ -103,6 +106,26 @@ export function guardBlockedAddress(
     !isAddressAllowedForTrading(getAddress()) ? Promise.reject(new Error(BLOCKED_ADDRESS_MESSAGE)) : placeOrder(input);
   trading.modifyOrder = (id, mod) =>
     !isAddressAllowedForTrading(getAddress()) ? Promise.reject(new Error(BLOCKED_ADDRESS_MESSAGE)) : modifyOrder(id, mod);
+}
+
+/** Enforce live feed availability at the adapter boundary, including non-UI callers. */
+export function guardLiveMarketData(
+  trading: Pick<HyperliquidTrading, "placeOrder" | "modifyOrder">,
+  getConnectionState: () => ConnectionState,
+): void {
+  const placeOrder = trading.placeOrder.bind(trading);
+  const modifyOrder = trading.modifyOrder.bind(trading);
+  const requireLiveFeed = () =>
+    getConnectionState() === "connected" ? null : new Error(LIVE_FEED_REQUIRED_MESSAGE);
+
+  trading.placeOrder = (input) => {
+    const error = requireLiveFeed();
+    return error ? Promise.reject(error) : placeOrder(input);
+  };
+  trading.modifyOrder = (id, mod) => {
+    const error = requireLiveFeed();
+    return error ? Promise.reject(error) : modifyOrder(id, mod);
+  };
 }
 
 export type HyperliquidAdapter = OpenChartsAdapter & { trading: HyperliquidTrading };
@@ -125,6 +148,7 @@ export function createHyperliquidAdapter(
   const trading = createHyperliquidTrading({ ...opts.trading, registry: md.registry });
   guardBuilderFeeErrors(trading);
   guardBlockedAddress(trading);
+  guardLiveMarketData(trading, () => md.getConnectionState());
 
   const marketData: OpenChartsAdapter["marketData"] = {
     ...md,
