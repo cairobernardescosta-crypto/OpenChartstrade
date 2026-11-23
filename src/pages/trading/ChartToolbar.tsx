@@ -50,6 +50,7 @@ import {
 } from "./constants.ts";
 import { ChartTemplatesMenu } from "./ChartTemplatesMenu.tsx";
 import { isHyperliquidMode } from "../../hyperliquid/ui/mode.ts";
+import { useHlSession } from "../../hyperliquid/session.ts";
 import { ReplayHUD } from "./ReplayHUD.tsx";
 import { getPipDigits } from "./utils.ts";
 
@@ -144,6 +145,7 @@ export function ChartToolbar({
 }: ChartToolbarProps) {
   const [showSymbolSearch, setShowSymbolSearch] = useState(false);
   const [symbolFilter, setSymbolFilter] = useState("");
+  const network = useHlSession((s) => s.network);
 
   const normalizedSymbolFilter = symbolFilter.trim().toLowerCase();
   const filteredSymbols = symbols.filter(
@@ -162,6 +164,17 @@ export function ChartToolbar({
 
   return (
     <div className="flex items-center gap-1 px-2 py-1 border-b border-border bg-card text-xs shrink-0 overflow-x-auto md:overflow-visible flex-nowrap md:flex-wrap no-scrollbar">
+      {isHyperliquidMode() && (
+        <div className="flex shrink-0 items-center gap-2 border-r border-border px-2">
+          <span className="text-sm font-semibold tracking-tight">OpenCharts</span>
+          {network !== "mainnet" && (
+            <span className="rounded border border-amber-500/60 px-1.5 text-[10px] font-semibold uppercase leading-4 text-amber-500">
+              {network}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Symbol Selector — TradingView style */}
       <div className="relative shrink-0">
         <button
