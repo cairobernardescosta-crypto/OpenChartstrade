@@ -31,6 +31,7 @@ interface MobileTradingPanelProps {
     quantity: number;
     type: "MARKET" | "LIMIT" | "STOP";
     price?: number;
+    stopPrice?: number;
     stopLoss?: number;
     takeProfit?: number;
     symbol: string;
@@ -101,7 +102,8 @@ export function MobileTradingPanel({
       quantity,
       type: orderType,
       symbol,
-      price: orderType !== "MARKET" && limitPrice ? Number(limitPrice) : undefined,
+      ...(orderType === "LIMIT" && limitPrice ? { price: Number(limitPrice) } : {}),
+      ...(orderType === "STOP" && limitPrice ? { stopPrice: Number(limitPrice) } : {}),
       stopLoss: stopLoss ? Number(stopLoss) : undefined,
       takeProfit: takeProfit ? Number(takeProfit) : undefined,
     });
