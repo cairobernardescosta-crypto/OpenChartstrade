@@ -173,11 +173,6 @@ export function HlWatchlist({ symbols, ticks, selectedSymbol, onSelect }: Watchl
                   >
                     <div className="flex items-center gap-1 truncate font-semibold">
                       <span className="truncate">{s.displayName || s.name}</span>
-                      {market?.dex && (
-                        <span className="shrink-0 rounded border border-border px-1 py-px text-[8px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          HIP-3
-                        </span>
-                      )}
                       {market && <MarketRiskBadge market={market} />}
                     </div>
                     <div className="truncate text-[10px] text-muted-foreground">
