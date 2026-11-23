@@ -79,6 +79,7 @@ export function useClosedPositions(accountId: string | null, page = 1) {
     queryKey: queryKeys.trading.closedPositions(accountId!, page),
     queryFn: () => api.getClosedPositions(accountId!, page),
     enabled: !!accountId,
+    enabled,
     staleTime: 30_000,
   });
 }
@@ -130,6 +131,7 @@ export function useCandles(
   limit?: number,
   replayVersion?: number,
   keepPreviousData = true,
+  enabled = true,
 ) {
   return useQuery<MarketDataCandlesPayload, Error, Candle[]>({
     // Include replayVersion in the query key so each replay session forces a
