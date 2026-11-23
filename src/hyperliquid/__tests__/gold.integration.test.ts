@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { MarketEvent } from "../../adapter/types.ts";
 import { createInfoClient } from "../info.ts";
 import { createHyperliquidMarketData, TIMEFRAME_MS } from "../marketData.ts";
@@ -65,10 +65,6 @@ function makeGoldSource() {
 
 describe("Hyperliquid GOLD market integration", () => {
   beforeEach(() => FakeWebSocket.reset());
-  afterEach(() => {
-    FakeWebSocket.last()?.close();
-  });
-
   it("discovers the exact HIP-3 symbol and loads every supported chart interval", async () => {
     const md = makeGoldSource();
     try {
