@@ -162,7 +162,7 @@ export function createHyperliquidAdapter(
   const trading = createHyperliquidTrading({ ...opts.trading, registry: md.registry });
   guardBuilderFeeErrors(trading);
   guardBlockedAddress(trading);
-  guardLiveMarketData(trading, () => md.getConnectionState(), (symbol) => md.getHealth(symbol));
+  guardLiveMarketData(trading, () => md.getConnectionState?.() ?? "disconnected", (symbol) => md.getHealth(symbol));
 
   const marketData: OpenChartsAdapter["marketData"] = {
     ...md,
