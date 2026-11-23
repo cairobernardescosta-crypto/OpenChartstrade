@@ -41,7 +41,8 @@ export const ComplianceGate: FC<{ children: ReactNode }> = ({ children }) => {
   useEffect(() => {
     if (!settings.geoUrl) {
       if (settings.blockedCountries.size > 0) {
-        console.error("[compliance] VITE_BLOCKED_COUNTRIES is set but VITE_GEO_CHECK_URL is not; the list is ignored.");
+        console.error("[compliance] VITE_BLOCKED_COUNTRIES is set but VITE_GEO_CHECK_URL is missing.");
+        if (!import.meta.env.DEV) setGeo("block");
       } else if (import.meta.env.DEV) {
         console.warn("[compliance] No VITE_GEO_CHECK_URL configured: geo gate disabled. Not acceptable for production.");
       }
