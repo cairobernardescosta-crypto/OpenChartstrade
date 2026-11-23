@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OrderPanel } from "@/pages/trading/OrderPanel";
+import { MobileTradingPanel } from "@/components/MobileTradingPanel";
 import { PositionsTable } from "@/pages/trading/PositionsTable";
 import { toast, type ToastPayload } from "@/services/toast";
 import * as engine from "@/services/demo/engine";
@@ -51,6 +52,54 @@ beforeEach(() => {
 afterEach(() => {
   toasts.stop();
   vi.restoreAllMocks();
+});
+
+describe("MobileTradingPanel", () => {
+  it("sends STOP trigger price through stopPrice, not price", async () => {
+    const user = userEvent.setup();
+    const onPlaceOrder = vi.fn();
+    render(
+      <MobileTradingPanel
+        symbol="xyz:GOLD"
+        bid={3668}
+        ask={3669}
+        positions={[]}
+        onPlaceOrder={onPlaceOrder}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "STOP" }));
+    await user.type(screen.getAllByRole("spinbutton")[0]!, "3675");
+    await user.click(screen.getByRole("button", { name: /BUY/ }));
+
+    expect(onPlaceOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "STOP", stopPrice: 3675 }),
+    );
+    expect(onPlaceOrder.mock.calls[0]![0]).not.toHaveProperty("price");
+  });
+
+  it("sends LIMIT price through price, not stopPrice", async () => {
+    const user = userEvent.setup();
+    const onPlaceOrder = vi.fn();
+    render(
+      <MobileTradingPanel
+        symbol="xyz:GOLD"
+        bid={3668}
+        ask={3669}
+        positions={[]}
+        onPlaceOrder={onPlaceOrder}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "LIMIT" }));
+    await user.type(screen.getAllByRole("spinbutton")[0]!, "3670");
+    await user.click(screen.getByRole("button", { name: /BUY/ }));
+
+    expect(onPlaceOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "LIMIT", price: 3670 }),
+    );
+    expect(onPlaceOrder.mock.calls[0]![0]).not.toHaveProperty("stopPrice");
+  });
 });
 
 describe("OrderPanel", () => {
