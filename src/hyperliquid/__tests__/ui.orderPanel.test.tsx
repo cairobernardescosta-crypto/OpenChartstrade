@@ -89,7 +89,7 @@ describe("HlOrderPanel: primary action by session status", () => {
   it("offers Connect wallet when disconnected", () => {
     hlSession.getState().patch({ address: null, status: "disconnected" });
     renderPanel();
-    expect(screen.getByRole("button", { name: /connect wallet/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^connect wallet$/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^buy/i })).not.toBeNull(); // the side toggle, not a submit
   });
 
@@ -111,13 +111,13 @@ describe("HlOrderPanel: size input", () => {
   it("rejects more decimals than szDecimals", async () => {
     renderPanel();
     await userEvent.type(sizeInput(), "0.123456");
-    expect(screen.getByRole("alert")).toHaveTextContent(/at most 5 decimals/i);
+    expect(screen.getByTestId("size-help")).toHaveTextContent(/at most 5 decimals/i);
   });
 
   it("enforces the $10 minimum, except for reduce-only", async () => {
     renderPanel();
     await userEvent.type(sizeInput(), "0.00005");
-    expect(screen.getByRole("alert")).toHaveTextContent(/minimum order value is \$10/i);
+    expect(screen.getByTestId("size-help")).toHaveTextContent(/minimum order value is \$10/i);
     await userEvent.click(screen.getByLabelText(/reduce only/i));
     expect(screen.queryByText(/minimum order value/i)).toBeNull();
   });
