@@ -9,6 +9,7 @@ export const HOVER_PANEL_CLOSE_DELAY_MS = 5_000;
  */
 export function useHoverCollapse() {
   const [isExpanded, setIsExpanded] = useState(false);
+  const isExpandedRef = useRef(false);
   const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -28,21 +29,23 @@ export function useHoverCollapse() {
 
   const onPointerEnter = useCallback(() => {
     clearCloseTimer();
-    if (isExpanded || openTimerRef.current !== null) return;
+    if (isExpandedRef.current || openTimerRef.current !== null) return;
 
     openTimerRef.current = setTimeout(() => {
       openTimerRef.current = null;
+      isExpandedRef.current = true;
       setIsExpanded(true);
     }, HOVER_PANEL_OPEN_DELAY_MS);
   }, [clearCloseTimer, isExpanded]);
 
   const onPointerLeave = useCallback(() => {
     clearOpenTimer();
-    if (!isExpanded) return;
+    if (!isExpandedRef.current) return;
 
     clearCloseTimer();
     closeTimerRef.current = setTimeout(() => {
       closeTimerRef.current = null;
+      isExpandedRef.current = false;
       setIsExpanded(false);
     }, HOVER_PANEL_CLOSE_DELAY_MS);
   }, [clearCloseTimer, clearOpenTimer, isExpanded]);
