@@ -107,6 +107,14 @@ export function TradingPage() {
   // drawings isolated in memory rather than merging them with the primary chart.
   const [secondaryDrawings, setSecondaryDrawings] = useState<DrawingLine[]>([]);
   const [secondaryPlugins, setSecondaryPlugins] = useState<string[]>([]);
+  // Hyperliquid can replace the initial placeholder symbol after its market
+  // list loads. Correct only an invalid secondary symbol; preserve user choice.
+  useEffect(() => {
+    if (symbols.length === 0 || symbols.some((symbol) => symbol.name === secondarySymbol)) return;
+    const fallback = symbols.find((symbol) => symbol.name === selectedSymbol)?.name ?? symbols[0]?.name;
+    if (fallback) setSecondarySymbol(fallback);
+  }, [secondarySymbol, selectedSymbol, symbols]);
+
 
 
   useEffect(() => {
@@ -197,7 +205,7 @@ export function TradingPage() {
     [activeIndicators, toggleIndicator],
   );
   const ticks = useTradingStore((s) => s.ticks);
-  const { data: secondaryCandles = [] } = useCandles(secondarySymbol, secondaryTimeframe, 400);
+  const { data: secondaryCandles = [] } = useCandles(secondarySymbol, secondaryTimeframe, 400, undefined, false);
   const secondaryTick = useTradingStore((s) => s.ticks[secondarySymbol]);
   const secondaryLiveCandle = useTradingStore(
     (s) => s.liveCandleUpdates[secondarySymbol + ":" + secondaryTimeframe],
