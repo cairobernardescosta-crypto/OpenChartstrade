@@ -489,7 +489,9 @@ export function TradingPage() {
               if (!rightPanelPointerInsideRef.current) rightPanelHover.onPointerLeave();
             }
           }}
-          className="pointer-events-none absolute inset-y-0 right-0 z-30 hidden w-[280px] md:block xl:w-[320px]"
+          className={`absolute inset-y-0 right-0 z-30 hidden w-[280px] md:block xl:w-[320px] ${
+            showRightPanel && rightPanelHover.isExpanded ? "pointer-events-auto" : "pointer-events-none"
+          }`}
         >
           <div
             aria-hidden={!showRightPanel || !rightPanelHover.isExpanded}
