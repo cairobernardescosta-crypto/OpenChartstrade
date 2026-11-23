@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   builderField,
   closeWire,
@@ -134,6 +134,14 @@ describe("slippagePx / minSizeFor / newCloid", () => {
     const a = newCloid();
     expect(a).toMatch(/^0x[0-9a-f]{32}$/);
     expect(newCloid()).not.toBe(a);
+  });
+  it("refuses to generate order ids without cryptographic randomness", () => {
+    vi.stubGlobal("crypto", undefined);
+    try {
+      expect(() => newCloid()).toThrow(/Secure random generation is unavailable/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
