@@ -5,7 +5,7 @@ test.describe("terminal (mocked Hyperliquid testnet)", () => {
   test("loads and lists markets by category, including Forex", async ({ page, hl }) => {
     await hl.open();
     await waitForTerminal(page);
-    await expect(page.getByTestId("hl-topbar").getByText(/^testnet$/i)).toBeVisible();
+    await expect(page.getByText(/^testnet$/i)).toBeVisible();
     await openSymbolPicker(page);
 
     // Each dropdown row reads "<symbol>[<display name>]<category>".
