@@ -397,8 +397,21 @@ export function createHyperliquidTrading(opts: HyperliquidTradingOptions): Hyper
 
   function placeOrder(input: HlPlaceOrderInput): Promise<Order> {
     const key = JSON.stringify([
-      input.symbol, input.side, input.type, input.quantity, input.price, input.stopPrice,
-      input.takeProfit, input.stopLoss, input.postOnly, input.reduceOnly,
+      hlSession.getState().network,
+      input.accountId,
+      input.symbol,
+      input.side,
+      input.type,
+      input.quantity,
+      input.price,
+      input.stopPrice,
+      input.takeProfit,
+      input.stopLoss,
+      input.postOnly,
+      input.reduceOnly,
+      input.leverage,
+      input.isCross,
+      input.slippage,
     ]);
     const existing = inflight.get(key);
     if (existing) return existing; // a double-click must not become two orders
