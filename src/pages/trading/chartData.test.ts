@@ -48,8 +48,8 @@ describe("buildChartData", () => {
     );
 
     expect(result.chartData.map((row) => row.time)).toEqual([
-      1_704_067_200,
       1_700_000_000,
+      1_704_067_200,
     ]);
   });
 });
