@@ -230,6 +230,10 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   // Toasts the reason and rethrows so callers can skip their success effects.
   const submitOrderDirect = useCallback(
     async (input: PlaceOrderInput) => {
+      if (!isFeedConnected) {
+        toast.warning("No Data Feed", "Order blocked because live market data is disconnected.");
+        throw new Error("Live market data is disconnected. Reconnect the feed before placing an order.");
+      }
       try {
         const order = await api.placeOrder(input);
         invalidateTrading();
@@ -239,7 +243,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
         throw err;
       }
     },
-    [invalidateTrading],
+    [invalidateTrading, isFeedConnected],
   );
 
   const modifyPositionLevels = useCallback(
