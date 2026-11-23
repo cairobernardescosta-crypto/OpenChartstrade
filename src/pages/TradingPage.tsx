@@ -150,7 +150,8 @@ export function TradingPage() {
   // ── Vertical resize: chart vs bottom panel ──
   const [bottomPanelHeight, setBottomPanelHeight] = useState(() => {
     const saved = safeStorage.getItem("bottomPanelHeight");
-    return saved ? parseInt(saved, 10) : 220;
+    const parsed = saved === null ? 220 : Number.parseInt(saved, 10);
+    return Number.isFinite(parsed) ? Math.max(100, Math.min(600, parsed)) : 220;
   });
   const resizingRef = useRef(false);
   const bottomPanelPointerInsideRef = useRef(false);
