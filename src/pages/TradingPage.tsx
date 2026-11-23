@@ -1,8 +1,10 @@
 import { useCallback, useRef, useState } from "react";
+import { ChevronLeft } from "lucide-react";
 import { MobileAccountBar, MobileTradingPanel } from "../components/MobileTradingPanel.tsx";
 import { NewsFeed as MarketNewsFeed } from "../components/TradingPowerFeatures.tsx";
 import { TradingViewTechnicalAnalysis } from "../components/TradingViewWidgets.tsx";
 import type { IndicatorType } from "../lib/indicators.ts";
+import { useHoverCollapse } from "../hooks/useHoverCollapse.ts";
 import { safeStorage } from "../lib/safe-storage.ts";
 import type { PlaceOrderInput } from "../services/schemas.ts";
 import { updateChartPreferences } from "../hooks/useChartPreferences.ts";
@@ -99,6 +101,8 @@ export function TradingPage() {
     "order" | "dom" | "watchlist" | "news" | "tv-analysis"
   >("order");
   const [showRightPanel, setShowRightPanel] = useState(true);
+  const rightPanelHover = useHoverCollapse();
+  const bottomPanelHover = useHoverCollapse();
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
 
   // ── Vertical resize: chart vs bottom panel ──
@@ -135,13 +139,14 @@ export function TradingPage() {
         window.removeEventListener("mouseup", onUp);
         window.removeEventListener("touchmove", onMove);
         window.removeEventListener("touchend", onUp);
+        bottomPanelHover.onPointerLeave();
       };
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
       window.addEventListener("touchmove", onMove, { passive: false });
       window.addEventListener("touchend", onUp);
     },
-    [bottomPanelHeight],
+    [bottomPanelHeight, bottomPanelHover.onPointerLeave],
   );
 
   // Loading a chart template swaps the whole indicator list; the toolbar's
@@ -252,39 +257,91 @@ export function TradingPage() {
             <ReplayScrubber accountId={activeAccountId} />
           )}
 
-          {/* ── Resize Handle ── */}
+          {/* Bottom panel: the resize grip remains visible while the content collapses. */}
           <div
-            onMouseDown={handleResizeStart}
-            onTouchStart={handleResizeStart}
-            className="hidden md:flex h-1.5 cursor-row-resize items-center justify-center hover:bg-primary/20 active:bg-primary/30 transition-colors group border-t border-border bg-secondary/40 touch-none"
+            role="group"
+            aria-label="Painel inferior retrátil"
+            aria-expanded={bottomPanelHover.isExpanded}
+            tabIndex={0}
+            onMouseEnter={bottomPanelHover.onPointerEnter}
+            onMouseLeave={() => {
+              if (!resizingRef.current) bottomPanelHover.onPointerLeave();
+            }}
+            onFocus={bottomPanelHover.onPointerEnter}
+            onBlur={(event) => {
+              if (
+                !event.currentTarget.contains(event.relatedTarget as Node | null) &&
+                !resizingRef.current
+              ) {
+                bottomPanelHover.onPointerLeave();
+              }
+            }}
+            className="flex flex-col shrink-0"
           >
-            <div className="w-8 h-0.5 rounded-full bg-border group-hover:bg-primary/50 transition-colors" />
-          </div>
+            {/* ── Resize Handle ── */}
+            <div
+              onMouseDown={handleResizeStart}
+              onTouchStart={handleResizeStart}
+              className="hidden md:flex h-1.5 cursor-row-resize items-center justify-center hover:bg-primary/20 active:bg-primary/30 transition-colors group border-t border-border bg-secondary/40 touch-none"
+            >
+              <div className="w-8 h-0.5 rounded-full bg-border group-hover:bg-primary/50 transition-colors" />
+            </div>
 
-          {/* Bottom Panel (Positions / Orders / Journal / Calendar / News) */}
-          <BottomPanel
-            tab={bottomTab}
-            onTabChange={setBottomTab}
-            positions={positions}
-            orders={orders}
-            accountId={activeAccountId}
-            onModifyPosition={setModifyingPosition}
-            onModifyOrder={setModifyingOrder}
-            onSelectPositionSymbol={setSelectedSymbol}
-            onSelectOrderSymbol={setSelectedSymbol}
-            height={bottomPanelHeight}
-            isFeedConnected={isFeedConnected}
-            journalEntries={journalEntries}
-            journalLoading={journalLoading}
-            onCreateJournal={createJournal}
-            onUpdateJournal={updateJournal}
-            onDeleteJournal={deleteJournal}
-          />
+            {/* Keep BottomPanel mounted so tab and table state survive collapse. */}
+            <div
+              className={`overflow-hidden transition-[max-height] duration-[600ms] ease-out motion-reduce:transition-none ${
+                bottomPanelHover.isExpanded ? "md:max-h-[600px]" : "md:max-h-0"
+              }`}
+            >
+              <BottomPanel
+                tab={bottomTab}
+                onTabChange={setBottomTab}
+                positions={positions}
+                orders={orders}
+                accountId={activeAccountId}
+                onModifyPosition={setModifyingPosition}
+                onModifyOrder={setModifyingOrder}
+                onSelectPositionSymbol={setSelectedSymbol}
+                onSelectOrderSymbol={setSelectedSymbol}
+                height={bottomPanelHeight}
+                isFeedConnected={isFeedConnected}
+                journalEntries={journalEntries}
+                journalLoading={journalLoading}
+                onCreateJournal={createJournal}
+                onUpdateJournal={updateJournal}
+                onDeleteJournal={deleteJournal}
+              />
+            </div>
+          </div>
         </div>
 
-        {/* Right Panel */}
-        {showRightPanel && (
-          <div className="hidden md:flex w-full md:w-[280px] xl:w-[320px] border-t md:border-t-0 md:border-l border-border flex-col bg-card overflow-hidden shrink-0 md:max-h-none">
+        {/* Right panel: keep its contents mounted and reveal them from the right edge. */}
+        <div
+          role="complementary"
+          aria-label="Painel lateral retrátil"
+          aria-expanded={showRightPanel && rightPanelHover.isExpanded}
+          tabIndex={showRightPanel ? 0 : -1}
+          onMouseEnter={rightPanelHover.onPointerEnter}
+          onMouseLeave={rightPanelHover.onPointerLeave}
+          onFocus={rightPanelHover.onPointerEnter}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              rightPanelHover.onPointerLeave();
+            }
+          }}
+          className={`relative hidden md:block shrink-0 overflow-hidden transition-[width] duration-[600ms] ease-out motion-reduce:transition-none ${
+            !showRightPanel
+              ? "w-0"
+              : rightPanelHover.isExpanded
+                ? "w-[280px] xl:w-[320px]"
+                : "w-3"
+          }`}
+        >
+          <div
+            aria-hidden={!showRightPanel || !rightPanelHover.isExpanded}
+            inert={!showRightPanel || !rightPanelHover.isExpanded}
+            className="absolute inset-y-0 right-0 flex w-[280px] xl:w-[320px] border-t md:border-t-0 md:border-l border-border flex-col bg-card overflow-hidden shrink-0 md:max-h-none"
+          >
             {rightPanel === "order" && (
               <OrderPanel
                 symbol={selectedSymbol}
@@ -330,7 +387,15 @@ export function TradingPage() {
               </div>
             )}
           </div>
-        )}
+          {showRightPanel && !rightPanelHover.isExpanded && (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 right-0 z-20 flex w-3 items-center justify-center border-l border-border bg-secondary/90"
+            >
+              <ChevronLeft className="h-3 w-3 text-muted-foreground" />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Mobile Trading Panel (small screens only) ──── */}
