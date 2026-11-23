@@ -1,5 +1,5 @@
 import { expect, test, BUILDER_ADDRESS, MAX_FEE_RATE } from "./support/fixtures.ts";
-import { selectSymbol, waitForTerminal } from "./support/app.ts";
+import { openOrderPanel, selectSymbol, waitForTerminal } from "./support/app.ts";
 
 const ARBITRUM_SEPOLIA = 421614;
 
@@ -7,7 +7,8 @@ test.describe("wallet connect and one-time setup", () => {
   test("connect opens the setup dialog; approveAgent + approveBuilderFee are signed with the configured fee", async ({ page, hl }) => {
     await hl.open();
     await waitForTerminal(page);
-    await page.getByRole("button", { name: "Connect wallet" }).first().click();
+    await openOrderPanel(page);
+    await page.getByRole("button", { name: "Connect wallet" }).filter({ visible: true }).first().click();
 
     const dialog = page.getByRole("dialog", { name: "Set up trading" });
     await expect(dialog).toBeVisible();
@@ -51,7 +52,8 @@ test.describe("wallet connect and one-time setup", () => {
   test("the agent key is NOT the wallet: only the approved agent address signs orders", async ({ page, hl }) => {
     await hl.open();
     await waitForTerminal(page);
-    await page.getByRole("button", { name: "Connect wallet" }).first().click();
+    await openOrderPanel(page);
+    await page.getByRole("button", { name: "Connect wallet" }).filter({ visible: true }).first().click();
     await page.getByRole("dialog", { name: "Set up trading" }).getByRole("button", { name: "Continue" }).click();
     await expect(page.getByTestId("step-3")).toHaveAttribute("data-state", "done");
     const [agentAction] = hl.fake.actionsOfType("approveAgent");
@@ -64,7 +66,8 @@ test.describe("wallet connect and one-time setup", () => {
   test("rejecting the wallet signature is handled and can be retried", async ({ page, hl }) => {
     await hl.open();
     await waitForTerminal(page);
-    await page.getByRole("button", { name: "Connect wallet" }).first().click();
+    await openOrderPanel(page);
+    await page.getByRole("button", { name: "Connect wallet" }).filter({ visible: true }).first().click();
     const dialog = page.getByRole("dialog", { name: "Set up trading" });
     hl.wallet.rejectNextSignature = true;
     await dialog.getByRole("button", { name: "Continue" }).click();
@@ -78,14 +81,16 @@ test.describe("wallet connect and one-time setup", () => {
   test("a returning user with an approved agent and fee skips setup after reload", async ({ page, hl }) => {
     await hl.open();
     await waitForTerminal(page);
-    await page.getByRole("button", { name: "Connect wallet" }).first().click();
+    await openOrderPanel(page);
+    await page.getByRole("button", { name: "Connect wallet" }).filter({ visible: true }).first().click();
     await page.getByRole("dialog", { name: "Set up trading" }).getByRole("button", { name: "Continue" }).click();
     await expect(page.getByTestId("step-3")).toHaveAttribute("data-state", "done");
     await page.getByRole("dialog", { name: "Set up trading" }).getByRole("button", { name: "Close", exact: true }).last().click();
 
     await page.reload();
     await waitForTerminal(page);
-    await expect(page.getByRole("button", { name: /^Wallet 0x/ })).toBeVisible();
+    await openOrderPanel(page);
+    await expect(page.getByRole("button", { name: /^Wallet 0x/ }).filter({ visible: true })).toBeVisible();
     await expect(page.getByRole("dialog", { name: "Set up trading" })).toHaveCount(0);
     await expect(page.getByText("Setup needed")).toHaveCount(0);
     expect(hl.fake.actionsOfType("approveAgent")).toHaveLength(1); // no second approval
