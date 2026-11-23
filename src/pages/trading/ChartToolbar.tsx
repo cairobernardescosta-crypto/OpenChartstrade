@@ -140,10 +140,12 @@ export function ChartToolbar({
   const [showSymbolSearch, setShowSymbolSearch] = useState(false);
   const [symbolFilter, setSymbolFilter] = useState("");
 
+  const normalizedSymbolFilter = symbolFilter.trim().toLowerCase();
   const filteredSymbols = symbols.filter(
     (s) =>
-      s.name.toLowerCase().includes(symbolFilter.toLowerCase()) ||
-      (s.category || "").toLowerCase().includes(symbolFilter.toLowerCase()),
+      s.name.toLowerCase().includes(normalizedSymbolFilter) ||
+      (s.displayName || "").toLowerCase().includes(normalizedSymbolFilter) ||
+      (s.category || "").toLowerCase().includes(normalizedSymbolFilter),
   );
 
   // Spread in pips/points: (ask - bid) / pipSize. Previously this multiplied
@@ -219,6 +221,9 @@ export function ChartToolbar({
                           {s.displayName && s.displayName !== s.name && (
                             <span className="text-xs text-muted-foreground">{s.displayName}</span>
                           )}
+                          {s.name.includes(":") && (
+                            <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">HIP-3 perpetual</span>
+                          )}
                         </div>
                         <span className="text-muted-foreground text-xs uppercase tracking-wide">
                           {s.category || s.assetClass}
@@ -256,6 +261,9 @@ export function ChartToolbar({
                     <span className="font-medium">{s.name}</span>
                     {s.displayName && s.displayName !== s.name && (
                       <span className="text-xs text-muted-foreground ml-2 mr-auto">{s.displayName}</span>
+                    )}
+                    {s.name.includes(":") && (
+                      <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground mr-2">HIP-3</span>
                     )}
                     <span className="text-muted-foreground text-xs">{s.category}</span>
                   </button>
