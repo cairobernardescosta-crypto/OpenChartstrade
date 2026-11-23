@@ -12,7 +12,10 @@ export const visibleButton = (page: Page, name: string | RegExp): Locator =>
 
 /** Wait until the terminal has loaded markets (the symbol picker lists them). */
 export async function waitForTerminal(page: Page): Promise<void> {
-  await expect(page.getByTestId("hl-topbar")).toBeVisible();
+  // The Hyperliquid terminal no longer renders the legacy hl-topbar. The
+  // OpenCharts brand is part of the current ChartToolbar and is a stable
+  // visible marker that the terminal shell has mounted.
+  await expect(page.getByText("OpenCharts", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /Connect wallet|Wallet 0x/ }).first()).toBeVisible();
 }
 
