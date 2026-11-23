@@ -79,7 +79,6 @@ export function useClosedPositions(accountId: string | null, page = 1) {
     queryKey: queryKeys.trading.closedPositions(accountId!, page),
     queryFn: () => api.getClosedPositions(accountId!, page),
     enabled: !!accountId,
-    enabled,
     staleTime: 30_000,
   });
 }
@@ -139,6 +138,7 @@ export function useCandles(
     // stale cache from a previous replay / normal session.
     queryKey: [...queryKeys.market.candles(symbol, timeframe), limit ?? "auto", replayVersion ?? 0],
     queryFn: () => api.getCandlesWithMeta(symbol, timeframe, limit),
+    enabled,
     // Extract just the candles array for consumers — raw payload (with isPartial)
     // is still accessible via query.state.data inside refetchInterval below.
     select: (data) => data.candles,
