@@ -6,7 +6,6 @@ const colors = { volumeUp: "#00aa00", volumeDown: "#aa0000" };
 
 function candle(overrides: Partial<Candle> & Pick<Candle, "time">): Candle {
   return {
-    time: overrides.time,
     open: 10,
     high: 12,
     low: 9,
