@@ -7,6 +7,7 @@ import { hlSession } from "./session.ts";
 import {
   createHyperliquidMarketData,
   HL_TICK_STALE_AFTER_MS,
+  type HyperliquidMarketDataHealth,
   type HyperliquidMarketDataOptions,
 } from "./marketData.ts";
 import { createHyperliquidTrading, type HyperliquidTradingOptions, type HyperliquidTrading } from "./trading.ts";
@@ -116,7 +117,7 @@ export function guardBlockedAddress(
 export function guardLiveMarketData(
   trading: Pick<HyperliquidTrading, "placeOrder" | "modifyOrder">,
   getConnectionState: () => ConnectionState,
-  getHealth: (symbol?: string) => { adapter: { status: string }; staleCount: number; totalSymbols: number; lastTickAgeMs: number },
+  getHealth: (symbol?: string) => HyperliquidMarketDataHealth,
 ): void {
   const placeOrder = trading.placeOrder.bind(trading);
   const modifyOrder = trading.modifyOrder.bind(trading);
