@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runAdapterConformance } from "../../adapter/conformance.ts";
-import { createAccountStorage, createHyperliquidAdapter } from "../adapter.ts";
+import {
+  createAccountStorage,
+  createHyperliquidAdapter,
+  guardLiveMarketData,
+  LIVE_FEED_REQUIRED_MESSAGE,
+} from "../adapter.ts";
+import type { HyperliquidTrading } from "../trading.ts";
+import type { ConnectionState } from "../../adapter/types.ts";
 import { createInfoClient } from "../info.ts";
 import { hlSession } from "../session.ts";
 import { FakeWebSocket, FakeWebSocketCtor } from "./fakeSocket.ts";
@@ -64,6 +71,35 @@ runAdapterConformance("hyperliquid (mocked network)", () => makeAdapter(), {
   symbol: "BTC",
   timeframe: "1m",
   tickTimeoutMs: 50,
+});
+
+describe("guardLiveMarketData", () => {
+  it("blocks place and modify order calls until the live feed is connected", async () => {
+    let state: ConnectionState = "disconnected";
+    const placeOrder = vi.fn(async () => ({}) as never);
+    const modifyOrder = vi.fn(async () => ({}) as never);
+    const trading = { placeOrder, modifyOrder } as unknown as HyperliquidTrading;
+
+    guardLiveMarketData(trading, () => state);
+    const order = {
+      accountId: "0xabc",
+      symbol: "BTC",
+      side: "BUY" as const,
+      type: "MARKET" as const,
+      quantity: 0.01,
+    };
+
+    await expect(trading.placeOrder(order)).rejects.toThrow(LIVE_FEED_REQUIRED_MESSAGE);
+    await expect(trading.modifyOrder("1", { price: 1 })).rejects.toThrow(LIVE_FEED_REQUIRED_MESSAGE);
+    expect(placeOrder).not.toHaveBeenCalled();
+    expect(modifyOrder).not.toHaveBeenCalled();
+
+    state = "connected";
+    await trading.placeOrder(order);
+    await trading.modifyOrder("1", { price: 1 });
+    expect(placeOrder).toHaveBeenCalledTimes(1);
+    expect(modifyOrder).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("createHyperliquidAdapter", () => {
