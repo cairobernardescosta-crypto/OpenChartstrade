@@ -217,7 +217,12 @@ export const api = {
     return quote ?? { symbol, bid: 0, ask: 0, timestamp: Date.now() };
   },
 
-  getMarketDataHealth: () => Promise.resolve({ status: "ok" as const }),
+  getMarketDataHealth: () => {
+    const marketData = getAdapter().marketData as typeof getAdapter extends () => infer A
+      ? A extends { marketData: infer M } ? M & { getHealth?: () => unknown } : never
+      : never;
+    return Promise.resolve(marketData.getHealth?.() ?? { status: "ok" as const });
+  },
 
   /** No calendar provider in the contract; hosts render their own if they have one. */
   getEconomicCalendar: (_currencies: string[], _from?: string, _to?: string) =>
