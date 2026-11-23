@@ -47,8 +47,14 @@ A result showing no active market, missing candles, or a missing quote is a fail
 - [x] Inspect the existing adapter, registry, market-data path, watchlist and chart contracts.
 - [x] Identify the existing GOLD commodity classification.
 - [x] Add a read-only live smoke test for active GOLD/XAU markets.
-- [ ] Run the smoke test locally and record the exact provider symbol, dex, candles and quote.
-- [ ] Confirm the provider's instrument specification and whether it is appropriate to label it XAUUSD.
+- [x] Run the smoke test locally and record the exact provider symbol, dex, candles and quote.
+- [x] Confirm that the discovered instrument is a HIP-3 perpetual market and must not be labelled as spot XAUUSD.
+
+Local runtime evidence supplied on 2026-11-23:
+- Active market: `xyz:GOLD` (dex `xyz`, asset id `110003`).
+- Five 1h candles returned successfully.
+- Top of book returned bid `3658.6` and ask `3658.9`.
+- The observed instrument is a Hyperliquid perpetual contract, not a verified spot XAU/USD feed.
 
 ### Phase 2 - symbol identity and discovery
 Only after Phase 1 confirms the live instrument:
@@ -85,8 +91,8 @@ Only after Phase 1 confirms the live instrument:
 
 ## Current status
 
-**Phase 1 code audit: complete. Live provider verification: pending.**
+**Phase 1 code audit and basic live provider verification: complete.** The existing dynamic registry already discovers `xyz:GOLD` under its exact provider symbol, and the shared adapter resolves that same symbol for history and quotes. No XAUUSD alias or separate chart is required or justified by the evidence. A focused regression test was added for all supported intervals and live event routing; its local execution remains pending.
 
 The GitHub API environment can inspect and commit repository content, but it cannot truthfully report a local runtime smoke test, local build, browser validation or the user's local Git working-tree state. Those checks remain pending until the diagnostic is run in the local project.
 
-No production application code, trading behavior, symbol aliases or live-data claims are changed by this audit. No GitHub Actions or workflows are used.
+No production application code, trading behavior or symbol aliases were changed. The existing shared adapter path is being covered by focused GOLD integration tests rather than duplicated with a gold-only implementation. No GitHub Actions or workflows are used.
