@@ -479,12 +479,14 @@ export function ChartToolbar({
             onClick={() => onRightPanel("news")}
           />
         )}
-        <ToolButton
-          icon={Star}
-          tooltip="TradingView Analysis"
-          active={showRightPanel && rightPanel === "tv-analysis"}
-          onClick={() => onRightPanel("tv-analysis")}
-        />
+        {!isHyperliquidMode() && (
+          <ToolButton
+            icon={Star}
+            tooltip="TradingView Analysis"
+            active={showRightPanel && rightPanel === "tv-analysis"}
+            onClick={() => onRightPanel("tv-analysis")}
+          />
+        )}
         <div className="h-4 border-l border-border mx-1" />
         <button
           onClick={onToggleRightPanel}
