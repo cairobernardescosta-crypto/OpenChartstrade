@@ -205,7 +205,7 @@ export function TradingPage() {
     [activeIndicators, toggleIndicator],
   );
   const ticks = useTradingStore((s) => s.ticks);
-  const { data: secondaryCandles = [] } = useCandles(secondarySymbol, secondaryTimeframe, 400, undefined, false);
+  const { data: secondaryCandles = [] } = useCandles(secondarySymbol, secondaryTimeframe, 400, undefined, false, chartLayout === "split");
   const secondaryTick = useTradingStore((s) => s.ticks[secondarySymbol]);
   const secondaryLiveCandle = useTradingStore(
     (s) => s.liveCandleUpdates[secondarySymbol + ":" + secondaryTimeframe],
