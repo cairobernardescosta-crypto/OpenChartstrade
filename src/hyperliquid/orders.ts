@@ -117,8 +117,10 @@ export function minSizeFor(ref: number, szDecimals: number): number {
 export function newCloid(): Cloid {
   const bytes = new Uint8Array(16);
   const c = (globalThis as { crypto?: Crypto }).crypto;
-  if (c?.getRandomValues) c.getRandomValues(bytes);
-  else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  if (!c?.getRandomValues) {
+    throw new TradeError("Secure random generation is unavailable. Use a modern HTTPS browser to trade.");
+  }
+  c.getRandomValues(bytes);
   return `0x${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
 }
 
