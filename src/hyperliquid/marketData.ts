@@ -495,7 +495,7 @@ export function createHyperliquidMarketData(
         },
         staleCount,
         totalSymbols: tracked.length,
-        lastTickAgeMs: ages.length > 0 ? Math.max(...ages) : -1,
+        lastTickAgeMs: tracked.length === 0 ? 0 : ages.length > 0 ? Math.max(...ages) : -1,
       };
     },
 
