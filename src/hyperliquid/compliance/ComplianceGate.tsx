@@ -32,7 +32,11 @@ function FullScreen({ title, children, role }: { title: string; children: ReactN
 export const ComplianceGate: FC<{ children: ReactNode }> = ({ children }) => {
   const settings = useMemo(() => readComplianceSettings(), []);
   const geoConfigured = !!settings.geoUrl;
-  const [geo, setGeo] = useState<GeoDecision | "checking">(geoConfigured ? "checking" : "allow");
+  const geoPolicyMisconfigured =
+    !import.meta.env.DEV && !geoConfigured && settings.blockedCountries.size > 0;
+  const [geo, setGeo] = useState<GeoDecision | "checking">(
+    geoConfigured ? "checking" : geoPolicyMisconfigured ? "block" : "allow",
+  );
   const [accepted, setAccepted] = useState<boolean>(() => hasAcceptedTerms());
 
   const address = useHlSession((s) => s.address);
