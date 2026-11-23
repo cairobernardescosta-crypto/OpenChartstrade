@@ -69,11 +69,12 @@ function createApi(opts: { candleCount?: number; listedAt?: number } = {}) {
   return { fetchImpl, calls, now };
 }
 
-function makeSource(opts: Parameters<typeof createApi>[0] = {}) {
+function makeSource(opts: Parameters<typeof createApi>[0] = {}, now: () => number = Date.now) {
   const api = createApi(opts);
   const md = createHyperliquidMarketData({
     info: createInfoClient({ fetchImpl: api.fetchImpl, sleep: () => Promise.resolve() }),
     webSocketImpl: FakeWebSocketCtor,
+    now,
   });
   return { md, api };
 }
@@ -296,6 +297,32 @@ describe("live streaming", () => {
     expect(seen).toEqual(["connected"]);
     ws.drop();
     expect(seen).toContain("reconnecting");
+  });
+
+  it("reports live tick freshness for tracked markets", async () => {
+    let now = 1_000;
+    const { md } = makeSource({}, () => now);
+    await md.getSymbols();
+    md.setSymbolInterest?.(["BTC"]);
+    md.connect?.();
+    const ws = FakeWebSocket.last();
+    ws.open();
+
+    expect(md.getHealth()).toMatchObject({
+      adapter: { status: "available" },
+      staleCount: 1,
+      totalSymbols: 1,
+      lastTickAgeMs: -1,
+    });
+
+    ws.push({ channel: "bbo", data: { coin: "BTC", time: now, bbo: [{ px: "100" }, { px: "101" }] } });
+    expect(md.getHealth()).toMatchObject({ staleCount: 0, totalSymbols: 1, lastTickAgeMs: 0 });
+
+    now += 31_000;
+    expect(md.getHealth()).toMatchObject({ staleCount: 1, totalSymbols: 1, lastTickAgeMs: 31_000 });
+
+    md.disconnect?.();
+    expect(md.getHealth().adapter.status).toBe("unavailable");
   });
 });
 
