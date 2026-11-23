@@ -77,7 +77,7 @@ describe("guardLiveMarketData", () => {
   it("blocks place and modify order calls until the live feed is connected", async () => {
     let state: ConnectionState = "disconnected";
     let health = {
-      adapter: { status: "available" },
+      adapter: { status: "available" as const },
       staleCount: 0,
       totalSymbols: 1,
       lastTickAgeMs: 0,
