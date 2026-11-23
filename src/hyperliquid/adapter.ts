@@ -1,6 +1,6 @@
 import type { OpenChartsAdapter, StorageDriver } from "../adapter/types.ts";
 import { safeStorage } from "../lib/safe-storage.ts";
-import { isAddressBlocked } from "./compliance/screen.ts";
+import { isAddressAllowedForTrading } from "./compliance/screen.ts";
 import { isBuilderFeeApprovalError } from "./feeConfig.ts";
 import { isBuilderFeeUnapprovedError } from "./orders.ts";
 import { hlSession } from "./session.ts";
@@ -85,12 +85,13 @@ export function guardBuilderFeeErrors(trading: Pick<HyperliquidTrading, "placeOr
 
 /** Shown when the connected wallet was refused by address screening. */
 export const BLOCKED_ADDRESS_MESSAGE =
-  "Trading is not available for this wallet address. If you believe this is a mistake, contact support.";
+  "Wallet screening has not approved this address yet. Wait for verification or contact support.";
 
 /**
- * Refuse to submit or modify orders for a wallet that address screening
- * rejected. Advisory (client-side) but it closes the gap between the UI gate
- * and any order path (ticket, chart, watchlist, API users of the adapter).
+ * Refuse to submit or modify orders until configured address screening has
+ * explicitly approved the connected wallet. This closes the async verification
+ * race across ticket, chart, watchlist and adapter callers. It remains a
+ * client-side control and must be mirrored by a trusted server/edge service.
  */
 export function guardBlockedAddress(
   trading: Pick<HyperliquidTrading, "placeOrder" | "modifyOrder">,
@@ -99,9 +100,9 @@ export function guardBlockedAddress(
   const placeOrder = trading.placeOrder.bind(trading);
   const modifyOrder = trading.modifyOrder.bind(trading);
   trading.placeOrder = (input) =>
-    isAddressBlocked(getAddress()) ? Promise.reject(new Error(BLOCKED_ADDRESS_MESSAGE)) : placeOrder(input);
+    !isAddressAllowedForTrading(getAddress()) ? Promise.reject(new Error(BLOCKED_ADDRESS_MESSAGE)) : placeOrder(input);
   trading.modifyOrder = (id, mod) =>
-    isAddressBlocked(getAddress()) ? Promise.reject(new Error(BLOCKED_ADDRESS_MESSAGE)) : modifyOrder(id, mod);
+    !isAddressAllowedForTrading(getAddress()) ? Promise.reject(new Error(BLOCKED_ADDRESS_MESSAGE)) : modifyOrder(id, mod);
 }
 
 export type HyperliquidAdapter = OpenChartsAdapter & { trading: HyperliquidTrading };
