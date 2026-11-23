@@ -129,6 +129,7 @@ export function useCandles(
   timeframe: string,
   limit?: number,
   replayVersion?: number,
+  keepPreviousData = true,
 ) {
   return useQuery<MarketDataCandlesPayload, Error, Candle[]>({
     // Include replayVersion in the query key so each replay session forces a
@@ -144,7 +145,7 @@ export function useCandles(
     // limit in the key) is in-flight. Without this, switching from firstPaint
     // → deep limit causes a momentary empty array, which lets a live WS candle
     // paint as the only bar before history arrives.
-    placeholderData: (prev) => prev,
+    placeholderData: keepPreviousData ? (prev) => prev : undefined,
     // When the server signals the response is partial (backfill queued), poll
     // at 3 s until data fills in. Otherwise use the 5-min safety-net cadence.
     refetchInterval: (query) => (query.state.data?.metadata?.isPartial ? 3_000 : 5 * 60_000),
