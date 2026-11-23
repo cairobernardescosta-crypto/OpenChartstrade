@@ -157,6 +157,23 @@ export function TradingPage() {
   const bottomPanelFocusInsideRef = useRef(false);
   const rightPanelPointerInsideRef = useRef(false);
   const rightPanelFocusInsideRef = useRef(false);
+  const handleRightPanelChange = useCallback(
+    (panel: "order" | "dom" | "watchlist" | "news" | "tv-analysis") => {
+      setRightPanel(panel);
+      setShowRightPanel(true);
+      rightPanelHover.onPointerEnter();
+    },
+    [rightPanelHover.onPointerEnter],
+  );
+  const handleRightPanelVisibilityToggle = useCallback(() => {
+    if (showRightPanel) {
+      setShowRightPanel(false);
+      rightPanelHover.onPointerLeave();
+      return;
+    }
+    setShowRightPanel(true);
+    rightPanelHover.onPointerEnter();
+  }, [showRightPanel, rightPanelHover.onPointerEnter, rightPanelHover.onPointerLeave]);
   const resizeStartY = useRef(0);
   const resizeStartH = useRef(0);
 
@@ -275,9 +292,9 @@ export function TradingPage() {
         drawings={activeChart === "primary" ? drawings : secondaryDrawings}
         onClearDrawings={activeChart === "primary" ? clearDrawings : clearSecondaryDrawings}
         rightPanel={rightPanel}
-        onRightPanel={setRightPanel}
+        onRightPanel={handleRightPanelChange}
         showRightPanel={showRightPanel}
-        onToggleRightPanel={() => setShowRightPanel((v) => !v)}
+        onToggleRightPanel={handleRightPanelVisibilityToggle}
         tick={activeChart === "primary" ? tick : secondaryTick}
         symbolInfo={activeChart === "primary" ? symbolInfo : secondarySymbolInfo}
         isReplaying={activeChart === "primary" && isReplaying}
@@ -448,7 +465,7 @@ export function TradingPage() {
           </div>
         </div>
 
-        {/* Right panel: keep its contents mounted and reveal them from the right edge. */}
+        {/* Fixed hit area; only the panel surface moves, avoiding hover loss during animation. */}
         <div
           role="complementary"
           aria-label="Painel lateral retrátil"
@@ -472,18 +489,19 @@ export function TradingPage() {
               if (!rightPanelPointerInsideRef.current) rightPanelHover.onPointerLeave();
             }
           }}
-          className={`absolute inset-y-0 right-0 z-30 hidden md:block w-[280px] xl:w-[320px] overflow-hidden transition-transform duration-[600ms] ease-out motion-reduce:transition-none ${
-            !showRightPanel
-              ? "translate-x-full pointer-events-none"
-              : rightPanelHover.isExpanded
-                ? "translate-x-0"
-                : "translate-x-[calc(100%-12px)]"
-          }`}
+          className="pointer-events-none absolute inset-y-0 right-0 z-30 hidden w-[280px] md:block xl:w-[320px]"
         >
           <div
             aria-hidden={!showRightPanel || !rightPanelHover.isExpanded}
             inert={!showRightPanel || !rightPanelHover.isExpanded}
-            className="absolute inset-y-0 right-0 flex w-full border-t md:border-t-0 md:border-l border-border flex-col bg-card overflow-hidden shrink-0 md:max-h-none"
+            className={[
+              "absolute inset-y-0 right-0 flex w-full border-t md:border-t-0 md:border-l border-border flex-col bg-card overflow-hidden shrink-0 md:max-h-none transition-transform duration-[600ms] ease-out motion-reduce:transition-none",
+              !showRightPanel
+                ? "translate-x-full pointer-events-none"
+                : rightPanelHover.isExpanded
+                  ? "translate-x-0 pointer-events-auto"
+                  : "translate-x-[calc(100%-12px)] pointer-events-none",
+            ].join(" ")}
           >
             {rightPanel === "order" && (
               <OrderPanel
@@ -533,7 +551,7 @@ export function TradingPage() {
           {showRightPanel && !rightPanelHover.isExpanded && (
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 right-0 z-20 flex w-3 items-center justify-center border-l border-border bg-secondary/90"
+              className="pointer-events-auto absolute inset-y-0 right-0 z-20 flex w-3 items-center justify-center border-l border-border bg-secondary/90"
             >
               <ChevronLeft className="h-3 w-3 text-muted-foreground" />
             </div>
