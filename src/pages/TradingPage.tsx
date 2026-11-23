@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { MobileAccountBar, MobileTradingPanel } from "../components/MobileTradingPanel.tsx";
 import { NewsFeed as MarketNewsFeed } from "../components/TradingPowerFeatures.tsx";
@@ -94,6 +94,25 @@ export function TradingPage() {
 
   // ── Layout state ──
   const [showIndicatorMenu, setShowIndicatorMenu] = useState(false);
+  const [chartLayout, setChartLayout] = useState<"single" | "split">("single");
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "")) return;
+      if (event.key === "1") {
+        event.preventDefault();
+        setChartLayout("single");
+      } else if (event.key === "2") {
+        event.preventDefault();
+        setChartLayout("split");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const [bottomTab, setBottomTab] = useState<
     "positions" | "orders" | "history" | "journal" | "calendar" | "news"
   >("positions");
@@ -214,14 +233,21 @@ export function TradingPage() {
         }
       />
 
+      <div className="flex items-center justify-end gap-1 px-2 py-1 border-b border-border bg-card">
+        <span className="mr-auto text-[10px] text-muted-foreground">Layout do gráfico</span>
+        <button type="button" aria-pressed={chartLayout === "single"} onClick={() => setChartLayout("single")} title="Um gráfico (Alt+1)" className={`rounded px-2 py-1 text-[11px] transition-colors ${chartLayout === "single" ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary"}`}>1 gráfico</button>
+        <button type="button" aria-pressed={chartLayout === "split"} onClick={() => setChartLayout("split")} title="Dois gráficos lado a lado (Alt+2)" className={`rounded px-2 py-1 text-[11px] transition-colors ${chartLayout === "split" ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary"}`}>2 gráficos</button>
+      </div>
+
       <MarketClosedBanner symbolInfo={symbolInfo} />
 
       {/* ── Main Layout ──────────────────────────────────── */}
       <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
         {/* Chart + Bottom Panel */}
         <div className="flex flex-col flex-1 min-w-0">
-          {/* Chart Area */}
-          <div className="flex-1 min-h-[200px] relative">
+          {/* Chart Area. Split mode initially mirrors the primary chart configuration. */}
+          <div className={`flex-1 min-h-[200px] relative ${chartLayout === "split" ? "grid grid-cols-2 gap-px bg-border" : ""}`}>
+            <div className="min-w-0 min-h-0 relative overflow-hidden">
             <ChartPanel
               candles={replayCandles ?? candles ?? []}
               selectedSymbol={selectedSymbol}
@@ -256,6 +282,45 @@ export function TradingPage() {
               onClearDrawings={clearDrawings}
               onClearIndicators={handleClearIndicators}
             />
+            </div>
+            {chartLayout === "split" && (
+              <div className="min-w-0 min-h-0 relative overflow-hidden">
+            <ChartPanel key="secondary"
+              candles={replayCandles ?? candles ?? []}
+              selectedSymbol={selectedSymbol}
+              timeframe={replayCandles ? "1m" : timeframe}
+              isDark={isDark}
+              activeIndicators={activeIndicators}
+              drawingTool={drawingTool}
+              drawings={drawings}
+              onAddDrawing={addDrawing}
+              onUpdateDrawing={updateDrawing}
+              onRemoveDrawing={removeDrawing}
+              onDrawingComplete={() => setDrawingTool("none")}
+              onDrawingToolSelect={setDrawingTool}
+              onUndoDrawing={undoDrawing}
+              onRedoDrawing={redoDrawing}
+              magnetMode={chartPrefs.magnetMode}
+              stayInDrawingMode={chartPrefs.stayInDrawingMode}
+              positions={chartPositions}
+              orders={chartOrders}
+              tick={replayCandles ? undefined : tick}
+              liveCandle={replayCandles ? undefined : liveCandle}
+              pipDigits={pipDigits}
+              symbolInfo={symbolInfo}
+              onModifyPosition={handleChartModifyPosition}
+              replayTradeEvents={replayTradeEvents}
+              isReplaying={isReplaying}
+              activePlugins={activePlugins}
+              onTogglePlugin={handleTogglePlugin}
+              accountEquity={account?.equity ?? account?.balance ?? 0}
+              accountId={activeAccountId}
+              onQuickOrder={handleQuickOrder}
+              onClearDrawings={clearDrawings}
+              onClearIndicators={handleClearIndicators}
+            />
+              </div>
+            )}
           </div>
 
           {/* Replay timeline scrubber — disabled until the feature is QA'd */}
