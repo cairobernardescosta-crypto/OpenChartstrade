@@ -44,6 +44,7 @@ export const TIMEFRAME_MS: Readonly<Record<string, number>> = {
 
 /** HL serves at most this many candles per interval. */
 export const HL_MAX_CANDLES = 5000;
+export const HL_TICK_STALE_AFTER_MS = 30_000;
 const DEFAULT_LIMIT = 500;
 const MAX_CHART_STREAMS = 6;
 const SYMBOLS_TTL_MS = 60_000;
@@ -70,7 +71,7 @@ export type HyperliquidMarketData = MarketDataSource & {
   registry: MarketRegistry;
   info: InfoClient;
   socket: HlSocket;
-  getHealth(): HyperliquidMarketDataHealth;
+  getHealth(symbol?: string): HyperliquidMarketDataHealth;
 };
 
 /** Map one raw HL candle to an OpenCharts candle (time in seconds). */
@@ -478,16 +479,18 @@ export function createHyperliquidMarketData(
 
     getConnectionState: () => socket.getState(),
 
-    getHealth(): HyperliquidMarketDataHealth {
+    getHealth(symbol?: string): HyperliquidMarketDataHealth {
       const state = socket.getState();
-      const tracked = [...new Set([...interest, ...[...chartKeys.values()].map((item) => item.symbol)])];
+      const tracked = symbol
+        ? [symbol]
+        : [...new Set([...interest, ...[...chartKeys.values()].map((item) => item.symbol)])];
       const ages = tracked
         .map((symbol) => lastTickAt.get(symbol))
         .filter((at): at is number => at !== undefined)
         .map((at) => Math.max(0, now() - at));
       const staleCount = tracked.filter((symbol) => {
         const at = lastTickAt.get(symbol);
-        return at === undefined || now() - at > 30_000;
+        return at === undefined || now() - at > HL_TICK_STALE_AFTER_MS;
       }).length;
       return {
         adapter: {
