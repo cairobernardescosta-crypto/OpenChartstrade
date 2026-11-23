@@ -3,7 +3,7 @@ import { ChevronLeft } from "lucide-react";
 import { MobileAccountBar, MobileTradingPanel } from "../components/MobileTradingPanel.tsx";
 import { NewsFeed as MarketNewsFeed } from "../components/TradingPowerFeatures.tsx";
 import { TradingViewTechnicalAnalysis } from "../components/TradingViewWidgets.tsx";
-import { INDICATOR_REGISTRY, type IndicatorType } from "../lib/indicators.ts";
+import { type IndicatorType } from "../lib/indicators.ts";
 import { useCandles } from "../services/queries.ts";
 import { useHoverCollapse } from "../hooks/useHoverCollapse.ts";
 import { safeStorage } from "../lib/safe-storage.ts";
@@ -14,7 +14,7 @@ import { useTerminal } from "../terminal/use-terminal.ts";
 import { BottomPanel } from "./trading/BottomPanel.tsx";
 import { ChartPanel } from "./trading/ChartPanel.tsx";
 import { ChartToolbar } from "./trading/ChartToolbar.tsx";
-import { REPLAY_ENABLED, TIMEFRAMES, type DrawingLine, type DrawingTool, type Timeframe } from "./trading/constants.ts";
+import { REPLAY_ENABLED, type DrawingLine, type DrawingTool, type Timeframe } from "./trading/constants.ts";
 import { getPipDigits } from "./trading/utils.ts";
 import { DOMPanel } from "./trading/DOMPanel.tsx";
 import { MarketClosedBanner } from "./trading/MarketClosedBanner.tsx";
@@ -97,6 +97,7 @@ export function TradingPage() {
   // ── Layout state ──
   const [showIndicatorMenu, setShowIndicatorMenu] = useState(false);
   const [chartLayout, setChartLayout] = useState<"single" | "split">("single");
+  const [activeChart, setActiveChart] = useState<"primary" | "secondary">("primary");
   // The secondary chart owns its market and indicator state. It starts on 1h
   // so split mode is useful immediately for multi-timeframe analysis.
   const [secondarySymbol, setSecondarySymbol] = useState(selectedSymbol);
@@ -124,6 +125,7 @@ export function TradingPage() {
       if (target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "")) return;
       if (event.key === "1") {
         event.preventDefault();
+        setActiveChart("primary");
         setChartLayout("single");
       } else if (event.key === "2") {
         event.preventDefault();
@@ -204,6 +206,9 @@ export function TradingPage() {
     },
     [activeIndicators, toggleIndicator],
   );
+  const setSecondaryIndicatorsFromToolbar = useCallback((next: IndicatorType[]) => {
+    setSecondaryIndicators(next);
+  }, []);
   const ticks = useTradingStore((s) => s.ticks);
   const { data: secondaryCandles = [] } = useCandles(secondarySymbol, secondaryTimeframe, 400, undefined, false, chartLayout === "split");
   const secondaryTick = useTradingStore((s) => s.ticks[secondarySymbol]);
@@ -251,31 +256,31 @@ export function TradingPage() {
 
       {/* ── Top Toolbar ──────────────────────────────────── */}
       <ChartToolbar
-        selectedSymbol={selectedSymbol}
+        selectedSymbol={activeChart === "primary" ? selectedSymbol : secondarySymbol}
         symbols={symbols}
-        onSymbolChange={setSelectedSymbol}
-        timeframe={timeframe}
-        onTimeframeChange={handleTimeframeChange}
-        activeIndicators={activeIndicators}
-        onToggleIndicator={toggleIndicator}
+        onSymbolChange={activeChart === "primary" ? setSelectedSymbol : setSecondarySymbol}
+        timeframe={activeChart === "primary" ? timeframe : secondaryTimeframe}
+        onTimeframeChange={activeChart === "primary" ? handleTimeframeChange : setSecondaryTimeframe}
+        activeIndicators={activeChart === "primary" ? activeIndicators : secondaryIndicators}
+        onToggleIndicator={activeChart === "primary" ? toggleIndicator : toggleSecondaryIndicator}
         showIndicatorMenu={showIndicatorMenu}
         onToggleIndicatorMenu={() => setShowIndicatorMenu((v) => !v)}
-        drawingTool={drawingTool}
-        onDrawingTool={setDrawingTool}
-        drawings={drawings}
-        onClearDrawings={clearDrawings}
+        drawingTool={activeChart === "primary" ? drawingTool : secondaryDrawingTool}
+        onDrawingTool={activeChart === "primary" ? setDrawingTool : setSecondaryDrawingTool}
+        drawings={activeChart === "primary" ? drawings : secondaryDrawings}
+        onClearDrawings={activeChart === "primary" ? clearDrawings : clearSecondaryDrawings}
         rightPanel={rightPanel}
         onRightPanel={setRightPanel}
         showRightPanel={showRightPanel}
         onToggleRightPanel={() => setShowRightPanel((v) => !v)}
-        tick={tick}
-        symbolInfo={symbolInfo}
-        isReplaying={isReplaying}
-        replayAccountId={activeAccountId}
-        activePlugins={activePlugins}
-        onTogglePlugin={handleTogglePlugin}
-        onSetIndicators={setIndicators}
-        onSetPlugins={handleSetPlugins}
+        tick={activeChart === "primary" ? tick : secondaryTick}
+        symbolInfo={activeChart === "primary" ? symbolInfo : secondarySymbolInfo}
+        isReplaying={activeChart === "primary" && isReplaying}
+        replayAccountId={activeChart === "primary" ? activeAccountId : null}
+        activePlugins={activeChart === "primary" ? activePlugins : secondaryPlugins}
+        onTogglePlugin={activeChart === "primary" ? handleTogglePlugin : toggleSecondaryPlugin}
+        onSetIndicators={activeChart === "primary" ? setIndicators : setSecondaryIndicatorsFromToolbar}
+        onSetPlugins={activeChart === "primary" ? handleSetPlugins : setSecondaryPlugins}
         magnetMode={chartPrefs.magnetMode}
         onCycleMagnet={cycleMagnetMode}
         stayInDrawingMode={chartPrefs.stayInDrawingMode}
@@ -286,7 +291,7 @@ export function TradingPage() {
 
       <div className="flex items-center justify-end gap-1 px-2 py-1 border-b border-border bg-card">
         <span className="mr-auto text-[10px] text-muted-foreground">Layout do gráfico</span>
-        <button type="button" aria-pressed={chartLayout === "single"} onClick={() => setChartLayout("single")} title="Um gráfico (Alt+1)" className={`rounded px-2 py-1 text-[11px] transition-colors ${chartLayout === "single" ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary"}`}>1 gráfico</button>
+        <button type="button" aria-pressed={chartLayout === "single"} onClick={() => { setActiveChart("primary"); setChartLayout("single"); }} title="Um gráfico (Alt+1)" className={`rounded px-2 py-1 text-[11px] transition-colors ${chartLayout === "single" ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary"}`}>1 gráfico</button>
         <button type="button" aria-pressed={chartLayout === "split"} onClick={() => setChartLayout("split")} title="Dois gráficos lado a lado (Alt+2)" className={`rounded px-2 py-1 text-[11px] transition-colors ${chartLayout === "split" ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary"}`}>2 gráficos</button>
       </div>
 
@@ -298,7 +303,7 @@ export function TradingPage() {
         <div className="flex flex-col flex-1 min-w-0">
           {/* Chart Area. Split mode initially mirrors the primary chart configuration. */}
           <div className={`flex-1 min-h-[200px] relative ${chartLayout === "split" ? "grid grid-cols-2 gap-px bg-border" : ""}`}>
-            <div className="min-w-0 min-h-0 relative overflow-hidden">
+            <div className={`min-w-0 min-h-0 h-full relative overflow-hidden ${activeChart === "primary" && chartLayout === "split" ? "ring-1 ring-inset ring-primary/50" : ""}`} onPointerDownCapture={() => setActiveChart("primary")}>
             <ChartPanel
               candles={replayCandles ?? candles ?? []}
               selectedSymbol={selectedSymbol}
@@ -335,45 +340,7 @@ export function TradingPage() {
             />
             </div>
             {chartLayout === "split" && (
-              <div className="flex min-w-0 min-h-0 flex-col overflow-hidden bg-background">
-                <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border bg-card px-2 py-1">
-                  <select
-                    aria-label="Ativo do segundo gráfico"
-                    value={secondarySymbol}
-                    onChange={(event) => setSecondarySymbol(event.target.value)}
-                    className="max-w-32 rounded border border-border bg-background px-2 py-1 text-xs font-semibold"
-                  >
-                    {symbols.map((symbol) => (
-                      <option key={symbol.id || symbol.name} value={symbol.name}>{symbol.name}</option>
-                    ))}
-                  </select>
-                  <select
-                    aria-label="Período do segundo gráfico"
-                    value={secondaryTimeframe}
-                    onChange={(event) => setSecondaryTimeframe(event.target.value as Timeframe)}
-                    className="rounded border border-border bg-background px-2 py-1 text-xs"
-                  >
-                    {TIMEFRAMES.map((tf) => <option key={tf} value={tf}>{tf}</option>)}
-                  </select>
-                  <div className="flex items-center gap-0.5">
-                    {INDICATOR_REGISTRY.map((indicator) => {
-                      const active = secondaryIndicators.includes(indicator.type);
-                      return (
-                        <button
-                          key={indicator.type}
-                          type="button"
-                          aria-pressed={active}
-                          title={indicator.label}
-                          onClick={() => toggleSecondaryIndicator(indicator.type)}
-                          className={active ? "rounded bg-primary/20 px-1.5 py-1 text-[10px] font-semibold text-primary" : "rounded px-1.5 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-secondary"}
-                        >
-                          {indicator.type}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <span className="ml-auto shrink-0 text-[9px] text-muted-foreground">Sem ordens</span>
-                </div>
+              <div className={`flex min-w-0 min-h-0 flex-col overflow-hidden bg-background ${activeChart === "secondary" ? "ring-1 ring-inset ring-primary/50" : ""}`} onPointerDownCapture={() => setActiveChart("secondary")}>
                 <div className="relative min-h-0 flex-1 overflow-hidden">
                   <ChartPanel
                     key="secondary"
