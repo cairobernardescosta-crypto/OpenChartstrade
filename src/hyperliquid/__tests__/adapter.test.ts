@@ -76,11 +76,17 @@ runAdapterConformance("hyperliquid (mocked network)", () => makeAdapter(), {
 describe("guardLiveMarketData", () => {
   it("blocks place and modify order calls until the live feed is connected", async () => {
     let state: ConnectionState = "disconnected";
+    let health = {
+      adapter: { status: "available" },
+      staleCount: 0,
+      totalSymbols: 1,
+      lastTickAgeMs: 0,
+    };
     const placeOrder = vi.fn(async () => ({}) as never);
     const modifyOrder = vi.fn(async () => ({}) as never);
     const trading = { placeOrder, modifyOrder } as unknown as HyperliquidTrading;
 
-    guardLiveMarketData(trading, () => state);
+    guardLiveMarketData(trading, () => state, () => health);
     const order = {
       accountId: "0xabc",
       symbol: "BTC",
@@ -95,6 +101,9 @@ describe("guardLiveMarketData", () => {
     expect(modifyOrder).not.toHaveBeenCalled();
 
     state = "connected";
+    health = { ...health, staleCount: 1, lastTickAgeMs: 31_000 };
+    await expect(trading.placeOrder(order)).rejects.toThrow(LIVE_FEED_REQUIRED_MESSAGE);
+    health = { ...health, staleCount: 0, lastTickAgeMs: 0 };
     await trading.placeOrder(order);
     await trading.modifyOrder("1", { price: 1 });
     expect(placeOrder).toHaveBeenCalledTimes(1);
