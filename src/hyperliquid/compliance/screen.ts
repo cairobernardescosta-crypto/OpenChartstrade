@@ -126,7 +126,13 @@ export async function screenAddress(address: string): Promise<ScreenResult> {
   return { allowed };
 }
 
-/** Synchronous guard for the trading path: false only if this address was screened and refused. */
+/** Synchronous trading guard. Configured screening must finish and explicitly allow this wallet. */
+export function isAddressAllowedForTrading(address: string | null | undefined): boolean {
+  if (!isScreeningConfigured()) return true;
+  return !!address && cache.get(address.toLowerCase()) === true;
+}
+
+/** Kept for UI compatibility: true only after an explicit screening refusal. */
 export function isAddressBlocked(address: string | null | undefined): boolean {
   return !!address && cache.get(address.toLowerCase()) === false;
 }
