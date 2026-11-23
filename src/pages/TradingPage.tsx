@@ -111,6 +111,7 @@ export function TradingPage() {
     return saved ? parseInt(saved, 10) : 220;
   });
   const resizingRef = useRef(false);
+  const bottomPanelPointerInsideRef = useRef(false);
   const resizeStartY = useRef(0);
   const resizeStartH = useRef(0);
 
@@ -139,7 +140,7 @@ export function TradingPage() {
         window.removeEventListener("mouseup", onUp);
         window.removeEventListener("touchmove", onMove);
         window.removeEventListener("touchend", onUp);
-        bottomPanelHover.onPointerLeave();
+        if (!bottomPanelPointerInsideRef.current) bottomPanelHover.onPointerLeave();
       };
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
@@ -263,15 +264,20 @@ export function TradingPage() {
             aria-label="Painel inferior retrátil"
             aria-expanded={bottomPanelHover.isExpanded}
             tabIndex={0}
-            onMouseEnter={bottomPanelHover.onPointerEnter}
+            onMouseEnter={() => {
+              bottomPanelPointerInsideRef.current = true;
+              bottomPanelHover.onPointerEnter();
+            }}
             onMouseLeave={() => {
+              bottomPanelPointerInsideRef.current = false;
               if (!resizingRef.current) bottomPanelHover.onPointerLeave();
             }}
             onFocus={bottomPanelHover.onPointerEnter}
             onBlur={(event) => {
               if (
                 !event.currentTarget.contains(event.relatedTarget as Node | null) &&
-                !resizingRef.current
+                !resizingRef.current &&
+                !bottomPanelPointerInsideRef.current
               ) {
                 bottomPanelHover.onPointerLeave();
               }
@@ -290,8 +296,11 @@ export function TradingPage() {
             {/* Keep BottomPanel mounted so tab and table state survive collapse. */}
             <div
               className={`overflow-hidden transition-[max-height] duration-[600ms] ease-out motion-reduce:transition-none ${
-                bottomPanelHover.isExpanded ? "md:max-h-[600px]" : "md:max-h-0"
+                bottomPanelHover.isExpanded
+                  ? "md:max-h-[var(--bottom-panel-height)]"
+                  : "md:max-h-0"
               }`}
+              style={{ "--bottom-panel-height": `${bottomPanelHeight}px` } as React.CSSProperties}
             >
               <BottomPanel
                 tab={bottomTab}
