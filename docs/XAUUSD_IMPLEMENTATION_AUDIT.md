@@ -93,6 +93,6 @@ Only after Phase 1 confirms the live instrument:
 
 **Phase 1 code audit and basic live provider verification: complete.** The existing dynamic registry already discovers `xyz:GOLD` under its exact provider symbol, and the shared adapter resolves that same symbol for history and quotes. No XAUUSD alias or separate chart is required or justified by the evidence. A focused regression test was added for all supported intervals and live event routing; its local execution remains pending.
 
-The GitHub API environment can inspect and commit repository content, but it cannot truthfully report a local runtime smoke test, local build, browser validation or the user's local Git working-tree state. Those checks remain pending until the diagnostic is run in the local project.
+The user ran the live smoke test and production build locally on 2026-11-23; both exited with code 0. The focused GOLD integration test added in this branch has not yet been executed locally. Browser validation of the terminal, including selecting GOLD alongside existing crypto markets, also remains pending. The GitHub API cannot run those local checks or inspect the user's current local Git working-tree state.
 
 No production application code, trading behavior or symbol aliases were changed. The existing shared adapter path is being covered by focused GOLD integration tests rather than duplicated with a gold-only implementation. No GitHub Actions or workflows are used.
