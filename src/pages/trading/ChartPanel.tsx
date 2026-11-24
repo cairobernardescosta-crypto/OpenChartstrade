@@ -14,6 +14,7 @@ import {
   type LogicalRange,
   type SeriesMarker,
   type Time,
+  TickMarkType,
 } from "lightweight-charts";
 import { Clock, ListTree } from "lucide-react";
 import {
@@ -69,6 +70,7 @@ import { useIndicators } from "./useIndicators.ts";
 import { useNewsOverlay } from "./useNewsOverlay.ts";
 import { useSlTpDrag } from "./useSlTpDrag.ts";
 import { useChartData } from "./chartData.ts";
+import { formatChartTick, formatChartTime } from "./chart-time.ts";
 import {
   formatCountdown,
   getCandleBucketTime,
@@ -1470,6 +1472,10 @@ export function ChartPanel({
     const minMove = getMinMove(pipDigits);
 
     const chart = createChart(containerRef.current, {
+      localization: {
+        locale: "pt-BR",
+        timeFormatter: formatChartTime,
+      },
       layout: {
         background: { type: ColorType.Solid, color: colors.background },
         textColor: colors.text,
@@ -1516,6 +1522,7 @@ export function ChartPanel({
         fixLeftEdge: false,
         fixRightEdge: false,
         borderVisible: true,
+        tickMarkFormatter: (time: Time, type: TickMarkType) => formatChartTick(time, type),
       },
       watermark: {
         visible: true,
