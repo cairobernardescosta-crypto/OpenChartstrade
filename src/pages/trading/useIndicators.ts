@@ -14,6 +14,7 @@ import {
   type IndicatorType,
 } from "../../lib/indicators.ts";
 import { toIndicatorCandles } from "./utils.ts";
+import { useOverrides, resolveIndicator, type ChartScope } from "../../lib/indicator-sdk/instances";
 import { expressionPoints } from "../../lib/indicator-sdk/expression";
 import { useIndicatorLibrary } from "../../lib/indicator-sdk/storage";
 import { SessionCandlePrimitive } from "../../lib/indicator-sdk/renderer";
@@ -26,11 +27,13 @@ export function useIndicators(
   activeIndicators: IndicatorType[],
   isDark: boolean,
   volumeData: readonly {time:Time;value:number}[] = [],
+  scope:ChartScope = "primary",
 ): void {
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<"Line"> | ISeriesApi<"Histogram">>>(
     new Map(),
   );
   const library = useIndicatorLibrary();
+  const overrides = useOverrides(scope);
   const colors = isDark ? CHART_COLORS.dark : CHART_COLORS.light;
 
   useEffect(() => {
@@ -51,7 +54,8 @@ export function useIndicators(
 
     for (const type of activeIndicators) {
       if (type.startsWith("custom:")) {
-        const entry = library.find(x => `custom:${x.id}` === type);
+        const definition = library.find(x => `custom:${x.id}` === type);
+        const entry = definition && resolveIndicator(definition,overrides);
         if (entry && entry.kind !== "session-candle") {
           const data = entry.kind === "expression" ? expressionPoints(indCandles,entry.expression) : (entry.kind === "sma" ? sma : ema)(indCandles, entry.period);
           const s = chart.addLineSeries({ color: entry.color, lineWidth: 1, priceScaleId: "right" });
@@ -215,13 +219,13 @@ export function useIndicators(
     }
     // chartRef/candleSeriesRef are stable refs; colors derived from isDark dep.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIndicators, chartData, isDark, library, volumeData]);
+  }, [activeIndicators, chartData, isDark, library, volumeData, overrides]);
 
   useEffect(() => {
     const series = candleSeriesRef.current;
     if (!series) return;
-    const primitives = library.filter(x => x.kind === "session-candle" && activeIndicators.includes(`custom:${x.id}`)).map(x => new SessionCandlePrimitive(x));
+    const primitives = library.filter(x => x.kind === "session-candle" && activeIndicators.includes(`custom:${x.id}`)).map(x => new SessionCandlePrimitive(resolveIndicator(x,overrides)));
     for (const primitive of primitives) series.attachPrimitive(primitive);
     return () => { for (const primitive of primitives) { try { series.detachPrimitive(primitive); } catch { /* disposed chart */ } } };
-  }, [activeIndicators, library, chartData.length === 0]);
+  }, [activeIndicators, library, overrides, chartData.length === 0]);
 }

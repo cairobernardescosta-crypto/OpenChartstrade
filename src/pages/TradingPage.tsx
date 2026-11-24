@@ -286,6 +286,7 @@ export function TradingPage() {
           if (layout === "single") setActiveChart("primary");
           setChartLayout(layout);
         }}
+        indicatorScope={activeChart}
         activeIndicators={activeChart === "primary" ? activeIndicators : secondaryIndicators}
         onToggleIndicator={activeChart === "primary" ? toggleIndicator : toggleSecondaryIndicator}
         showIndicatorMenu={showIndicatorMenu}
@@ -367,6 +368,7 @@ export function TradingPage() {
                     selectedSymbol={secondarySymbol}
                     timeframe={secondaryTimeframe}
                     isDark={isDark}
+                    indicatorScope="secondary"
                     activeIndicators={secondaryIndicators}
                     drawingTool={secondaryDrawingTool}
                     drawings={secondaryDrawings}

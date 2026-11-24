@@ -73,6 +73,7 @@ export interface ChartToolbarProps {
   chartLayout: "single" | "split";
   onChartLayoutChange: (layout: "single" | "split") => void;
   activeIndicators: IndicatorType[];
+  indicatorScope?: "primary" | "secondary";
   onToggleIndicator: (type: IndicatorType) => void;
   showIndicatorMenu: boolean;
   onToggleIndicatorMenu: () => void;
@@ -120,6 +121,7 @@ export function ChartToolbar({
   chartLayout,
   onChartLayoutChange,
   activeIndicators,
+  indicatorScope = "primary",
   onToggleIndicator,
   showIndicatorMenu,
   onToggleIndicatorMenu,
@@ -408,7 +410,7 @@ export function ChartToolbar({
 
           {showIndicatorMenu && (
             <div className="absolute top-full left-0 z-50 mt-1 w-80 max-h-[75vh] overflow-y-auto bg-card border border-border rounded-lg shadow-xl p-2 space-y-0.5">
-              <IndicatorLibraryMenu active={activeIndicators} toggle={onToggleIndicator} />
+              <IndicatorLibraryMenu key={indicatorScope} scope={indicatorScope} active={activeIndicators} toggle={onToggleIndicator} />
               {INDICATOR_REGISTRY.map((ind) => (
                 <button
                   key={ind.type}

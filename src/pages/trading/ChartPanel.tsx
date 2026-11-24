@@ -211,6 +211,7 @@ export interface ChartPanelProps {
   timeframe: Timeframe;
   isDark: boolean;
   activeIndicators: IndicatorType[];
+  indicatorScope?: "primary" | "secondary";
   drawingTool: DrawingTool;
   drawings: DrawingLine[];
   onAddDrawing: (d: DrawingLine) => void;
@@ -1087,6 +1088,7 @@ export function ChartPanel({
   timeframe,
   isDark,
   activeIndicators,
+  indicatorScope = "primary",
   drawingTool,
   drawings,
   onAddDrawing,
@@ -1419,7 +1421,7 @@ export function ChartPanel({
     [onAddDrawing, pipDigits, timeframe, selectedSymbol],
   );
 
-  useIndicators(chartRef, candleSeriesRef, chartData, activeIndicators, isDark, volumeData);
+  useIndicators(chartRef, candleSeriesRef, chartData, activeIndicators, isDark, volumeData, indicatorScope);
 
   // ── Replay trade event markers ─────────────────────────────
   useEffect(() => {

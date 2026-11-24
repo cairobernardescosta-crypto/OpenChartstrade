@@ -15,7 +15,7 @@ export class SessionCandlePrimitive extends PluginBase {
   public override attached(param:Parameters<PluginBase["attached"]>[0]) {super.attached(param);this.refresh();}
   protected override dataUpdated(_scope:DataChangedScope) {this.refresh();}
   private refresh() {
-    const candles=this.series.data().filter((x):x is typeof x & CandleData => typeof x.time==="number" && "open" in x && "close" in x && "high" in x && "low" in x);
+    const candles:CandleData[]=this.series.data().flatMap(x=>typeof x.time==="number" && "open" in x && "close" in x && "high" in x && "low" in x ? [{time:x.time,open:x.open,high:x.high,low:x.low,close:x.close}] : []);
     this.range=sessionRange(candles,this.config);this.requestUpdate();
   }
   paneViews():readonly ISeriesPrimitivePaneView[]{return [this.view];}
