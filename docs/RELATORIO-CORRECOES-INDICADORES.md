@@ -63,7 +63,7 @@ Dois erros TypeScript adicionais, ocultos anteriormente pelo C01, também foram 
 | Testes direcionados replay/REST | 29/29 aprovados |
 | `npm.cmd run typecheck` | Aprovado |
 | `npm.cmd run lint` | Aprovado, sem erros ou warnings |
-| `npm.cmd test` | 77 arquivos aprovados, 1 ignorado; 869 testes aprovados, 1 ignorado |
+| `npm.cmd test` | 77 arquivos aprovados, 1 ignorado; 870 testes aprovados, 1 ignorado |
 | `npm.cmd run build` | Aprovado; 3.678 módulos transformados |
 | `npm.cmd run check:size` | Aprovado; 1.081,6 KB bruto e 317,6 KB gzip, dentro do orçamento |
 | `git diff --check` | Aprovado |
