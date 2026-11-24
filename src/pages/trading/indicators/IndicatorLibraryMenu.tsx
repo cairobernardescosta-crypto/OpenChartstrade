@@ -1,29 +1,25 @@
 import { useState } from "react";
 import {IndicatorErrorNotice} from "./IndicatorErrorNotice";
-import {useQueryClient} from "@tanstack/react-query";
+import {IndicatorBackupPanel} from "./IndicatorBackupPanel";
 import {useHistoryStatuses,historyStatusLabel} from "../../../lib/indicator-sdk/history-status";
 import {IndicatorActions} from "./IndicatorActions";
 import {GraphicEditor} from "./GraphicEditor";
-import {exportIndicatorBackup,exportWorkspaceBackup,restoreIndicatorBackup,MAX_BACKUP_SIZE} from "../../../lib/indicator-sdk/backup";
 import {IndicatorAdminPanel} from "./IndicatorAdminPanel";
 import {IndicatorPreview} from "./IndicatorPreview";
 import {useIndicatorAdmin} from "../../../lib/indicator-sdk/admin";
 import {usePersistenceError} from "../../../lib/indicator-sdk/database";
-import { useOverrides, saveOverride, resetOverride, clearOverrides, resolveIndicator, exportOverrides, restoreOverrides, type ChartScope } from "../../../lib/indicator-sdk/instances";
+import { useOverrides, saveOverride, resetOverride, clearOverrides, resolveIndicator, type ChartScope } from "../../../lib/indicator-sdk/instances";
 import type { CandleData,IndicatorType } from "../../../lib/indicators";
 import { HTF_EXAMPLE, parseIndicator, indicatorSchema, type ImportedIndicator } from "../../../lib/indicator-sdk/schema";
-import { useIndicatorLibrary, installIndicator, updateIndicator, removeIndicator, duplicateIndicator, versions, restoreVersion, setIndicatorFavorite, exportLibrary, restoreLibrary, getLibraryError } from "../../../lib/indicator-sdk/storage";
+import { useIndicatorLibrary, installIndicator, updateIndicator, removeIndicator, duplicateIndicator, versions, restoreVersion, setIndicatorFavorite, getLibraryError } from "../../../lib/indicator-sdk/storage";
 
 export function IndicatorLibraryMenu({active,toggle,scope="primary",symbol="",timeframe="1m",replay=false,previewCandles}:{active: IndicatorType[];toggle:(type:IndicatorType)=>void;scope?:ChartScope;symbol?:string;timeframe?:string;replay?:boolean;previewCandles?:readonly CandleData[]}) {
-  const queryClient=useQueryClient();
   const library=useIndicatorLibrary();
   const historyStatuses=useHistoryStatuses();
   const admin=useIndicatorAdmin();
   const storageError=usePersistenceError();
-  const [restoring,setRestoring]=useState(false);
   const [viewSource,setViewSource]=useState<string|null>(null);
   const [showAdmin,setShowAdmin]=useState(false);
-  const [overrideText,setOverrideText]=useState("");
   const overrides=useOverrides(scope);
   const [editTarget,setEditTarget]=useState<"global"|ChartScope>("global");
   const localEdit=editTarget!=="global";
@@ -37,8 +33,6 @@ export function IndicatorLibraryMenu({active,toggle,scope="primary",symbol="",ti
   const [favorites,setFavorites]=useState(false);
   const [filter,setFilter]=useState("all");
   const [backup,setBackup]=useState(false);
-  const [backupText,setBackupText]=useState("");
-  const [fullBackup,setFullBackup]=useState("");
   const [revisionId,setRevisionId]=useState<string|null>(null);
   function attempt(fn:()=>void) {try {fn();setError("");} catch(e){setError(e instanceof Error?e.message:String(e));}}
   return <div className="border-b border-border pb-2 mb-2 space-y-2">
@@ -48,12 +42,11 @@ export function IndicatorLibraryMenu({active,toggle,scope="primary",symbol="",ti
       <textarea aria-label="Código do indicador" className="w-full h-24 bg-background border border-border rounded p-1 text-xs font-mono" value={source} onChange={e=>setSource(e.target.value)} placeholder="export default {...}" maxLength={65536}/>
       <div className="flex gap-2 text-xs"><button onClick={()=>setSource("export default "+HTF_EXAMPLE+";")}>Exemplo HTF</button><button onClick={()=>attempt(()=>{setEditTarget("global");setDraft(parseIndicator(source));})}>Prévia</button></div>
     </div>}
-    <div className="flex gap-2 text-xs"><button onClick={()=>setFavorites(v=>!v)} aria-pressed={favorites}>★ Favoritos</button><button onClick={()=>{attempt(()=>{setFullBackup(exportIndicatorBackup());setBackupText(exportLibrary());setOverrideText(exportOverrides());setBackup(v=>!v);});}}>Backup</button></div>
-    {backup&&<div className="space-y-2 rounded border border-border p-2 text-xs"><p className="font-semibold">Backup completo de indicadores</p><button className="rounded border border-border px-2 py-1" onClick={()=>attempt(()=>{const url=URL.createObjectURL(new Blob([exportIndicatorBackup()],{type:"application/json"}));const a=document.createElement("a");a.href=url;a.download="opencharts-indicators-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);})}>Baixar backup dos indicadores</button><button className="rounded border border-border px-2 py-1" disabled={restoring} onClick={()=>{setRestoring(true);void exportWorkspaceBackup().then(text=>{const url=URL.createObjectURL(new Blob([text],{type:"application/json"}));const a=document.createElement("a");a.href=url;a.download="opencharts-workspace-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);setFullBackup(text);setError("");}).catch(e=>setError(String(e))).finally(()=>setRestoring(false));}}>Baixar backup do espaço de trabalho (modelos e desenhos salvos)</button><input aria-label="Selecionar backup completo" type="file" accept=".json" onChange={e=>{const file=e.target.files?.[0];if(!file)return;if(file.size>MAX_BACKUP_SIZE){setError("Arquivo de backup muito grande");return;}void file.text().then(setFullBackup).catch(e=>setError(String(e)));}}/><textarea aria-label="Backup completo" className="w-full h-24 bg-background border border-border rounded" value={fullBackup} onChange={e=>setFullBackup(e.target.value)}/><button disabled={restoring} onClick={()=>{if(!window.confirm("Restaurar definições, revisões e configurações dos indicadores e mesclar modelos e desenhos salvos, quando incluídos?"))return;setRestoring(true);void restoreIndicatorBackup(fullBackup).then(()=>{setError("");void queryClient.invalidateQueries();}).catch(e=>setError(String(e))).finally(()=>setRestoring(false));}}>{restoring?"Restaurando…":"Restaurar backup completo"}</button></div>}
-    {backup && <div className="space-y-1"><textarea aria-label="Backup da biblioteca" className="w-full h-24 bg-background border border-border text-xs" value={backupText} onChange={e=>setBackupText(e.target.value)}/><button onClick={()=>attempt(()=>{if(window.confirm("Substituir a biblioteca de indicadores?"))restoreLibrary(backupText);})}>Restaurar biblioteca</button></div>}
+    <div className="flex gap-2 text-xs"><button onClick={()=>setFavorites(v=>!v)} aria-pressed={favorites}>★ Favoritos</button><button type="button" aria-expanded={backup} onClick={()=>setBackup(v=>!v)}>Backups</button></div>
+    {backup&&<IndicatorBackupPanel/>}
     <button type="button" className="flex w-full items-center justify-between rounded px-2 py-1.5 text-xs hover:bg-secondary" aria-expanded={showAdmin} onClick={()=>setShowAdmin(v=>!v)}>Administração <span aria-hidden="true">{showAdmin?"−":"+"}</span></button>
     {showAdmin&&<IndicatorAdminPanel scope={scope} installed={library.length} activeCount={active.filter(x=>x.startsWith("custom:")).length} onError={setError}/>}
-    {backup&&<div className="space-y-1"><textarea aria-label="Backup das configurações do gráfico" className="w-full h-20 bg-background border border-border text-xs" value={overrideText} onChange={e=>setOverrideText(e.target.value)}/><button onClick={()=>attempt(()=>{if(window.confirm("Substituir as configurações dos indicadores do gráfico?"))restoreOverrides(overrideText);})}>Restaurar configurações do gráfico</button></div>}
+
     {getLibraryError() && <p role="alert" className="text-xs">Não foi possível carregar a biblioteca salva.</p>}
     {draft && <div className="border border-border rounded p-2 text-xs space-y-2">
       <div className="flex items-center justify-between gap-2"><div className="font-semibold">{draft.name} · {draft.version}</div><span className="rounded border border-border px-2 py-1 text-[10px] font-medium">{localEdit?"Individual":"Global"}</span></div>

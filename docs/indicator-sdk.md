@@ -99,3 +99,6 @@ Estados por indicador, ativo e gráfico: carregando, atualizando, disponível, v
 
 ## L06 mensagens de erro
 Aviso reutilizável em português com categoria, orientação e detalhes técnicos recolhíveis. Aplicado à biblioteca, prévia, objetos gráficos e administração, sem modificar contratos de dados ou regras de execução. Detalhes limitados e URLs/credenciais comuns ocultadas na apresentação. Testes adicionados; validação local pendente.
+
+## L07 central de backups
+Um painel reúne exportação de espaço de trabalho e indicadores, seleção e validação de arquivos antes da restauração, resumo de conteúdo e confirmação do escopo. Exportações parciais e colagem JSON ficam em opções avançadas. Formatos anteriores preservados. Nomes de arquivos incluem data e hora UTC. Operações parciais mantêm o mecanismo de persistência existente; a confirmação de gravação depende do diagnóstico de armazenamento. Validação local pendente.
