@@ -87,3 +87,6 @@ Rótulos da biblioteca, editor, prévia, administração e backup traduzidos par
 
 ## L02 ações compactas
 A lista mantém ativação e favoritos visíveis; edição global, edição por gráfico, duplicação, revisões, código, restauração, exportação e desinstalação ficam em uma expansão de ações. Fechamento por clique externo ou Escape, confirmação de desinstalação preservada. Validação local pendente.
+
+## L03 organização administrativa
+Painel administrativo separado em limites globais, desempenho por gráfico, segurança e recuperação. Limites passam por validação antes de aplicação explícita; cancelar alterações não modifica a configuração persistida. Mantidas as ações de diagnóstico e recuperação, com escopo e estados de operação identificados. Validação local pendente.
