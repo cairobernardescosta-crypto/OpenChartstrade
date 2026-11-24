@@ -90,3 +90,6 @@ A lista mantém ativação e favoritos visíveis; edição global, edição por 
 
 ## L03 organização administrativa
 Painel administrativo separado em limites globais, desempenho por gráfico, segurança e recuperação. Limites passam por validação antes de aplicação explícita; cancelar alterações não modifica a configuração persistida. Mantidas as ações de diagnóstico e recuperação, com escopo e estados de operação identificados. Validação local pendente.
+
+## L04 escopo da edição
+O editor fixa o destino ao abrir (biblioteca global, gráfico principal ou secundário), apresenta aviso e botão de gravação específicos e identifica personalizações ativas ou de versão anterior na lista. A edição individual não grava na biblioteca; alterações de versão concorrentes são rejeitadas. Restaurar configuração individual remove somente o override do gráfico escolhido, mediante confirmação. A definição global continua sujeita às regras existentes de compatibilidade de versão. Validação local pendente.
