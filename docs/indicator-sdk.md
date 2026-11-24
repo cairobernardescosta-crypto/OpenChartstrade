@@ -1,110 +1,91 @@
-# OpenCharts Indicator SDK 1
-Import a .ts containing exactly export default followed by a JSON object. No executable TypeScript is run. Supported kinds: sma, ema, session-candle, expression. Expressions accept bounded OHLCV arithmetic only (+ - * / parentheses); no calls, imports, network or wallet access. Example: {"sdk":1,"id":"typical","name":"Typical price","version":"1.0.0","kind":"expression","expression":"(high+low+close)/3"}.
-Use Indicators > Import indicator; preview parameters, save and activate. Includes search, favorites, duplication, name/color/settings editing, export, five prior definition snapshots and JSON library backup/restore. Storage remains localStorage. Edit applies to the selected chart, Reset restores library defaults. Duplicate creates another independently configurable definition. Version changes invalidate stale chart overrides. Library backup does not include chart overrides.
-Session candle supports opening/closing, IANA timezone, weekdays, color, opacity, width, distance and visibility. Future boundary projection is approximate with gaps/coarse candles; complete session history is required. Leave sufficient right chart margin. Historical volume is now passed to mathematical indicators; live-volume updates still require verification.
-Not complete: IndexedDB, arbitrary TS sandbox, full drawing API, true lower panes, multi-timeframe requests, visual preview, diagnostic/admin dashboard, incremental updates, comprehensive replay tests, template snapshots of overrides. Run local typecheck, lint, unit tests, E2E and build before release.
+# OpenCharts — Guia consolidado do SDK de indicadores 1
 
-## Increment: storage and management
-IndexedDB mirrors library, revision history and per-chart overrides asynchronously; localStorage remains the authoritative compatibility cache. Manual mirror recovery restores library definitions. Library export includes revision history; chart settings are exported/restored separately. Preview uses synthetic data, not the live chart. Administrative limits restrict imported active instances and mathematical history size. The session primitive is still not bounded by the mathematical history limit. Diagnostics show persistence errors and counts, not measured memory/CPU. Arbitrary TS execution, full graphical DSL, real multi-timeframe aggregation and live integration validation remain outstanding.
+> Estado: implementação acumulada na branch `feat/xauusd-market-audit`. A compilação, os testes e a validação visual desta rodada ainda estão pendentes no ambiente local. Este guia descreve o código implementado, não uma certificação de funcionamento.
 
-## Declarative graphics
-The graphics kind accepts up to 100 validated drawing commands: line, horizontal, vertical, box, text, arrow and table. Coordinates use price and logical bar offsets from the latest bar. These are static declarative graphics, not a general programmable drawing runtime. Graphics preview reports validated command count; actual chart rendering requires local validation.
+## Índice
 
-## Live update and aggregation increment
-Mathematical series are reused while active and refreshed from candle/volume series subscriptions, coalesced to 200 ms. Calculations remain full-window, not O(1). Imported mathematical kinds can aggregate complete UTC-aligned periods from loaded lower-resolution candles; incomplete buckets and gaps are excluded and output is timestamped at the last contributing bar. No independent market-data requests are made. HTF session drawing rejects incomplete starting history and incompatible source boundaries; future coordinates remain approximate and visible right margin is still needed. Local typecheck and browser testing are required.
+- [Importação e segurança](#importação-e-segurança)
+- [Biblioteca e edição](#biblioteca-e-edição)
+- [Histórico e sessões HTF](#histórico-e-sessões-htf)
+- [Objetos gráficos e prévias](#objetos-gráficos-e-prévias)
+- [Painéis, templates e aparência](#painéis-templates-e-aparência)
+- [Administração e desempenho](#administração-e-desempenho)
+- [Persistência, revisões e backups](#persistência-revisões-e-backups)
+- [Limitações e validação](#limitações-e-validação)
 
-## Template and diagnostic increment
-Templates now include active imported definitions and chart-specific overrides. Loading validates definitions, installs only missing IDs, retains existing installed versions, and filters unknown indicator IDs. Older templates remain supported. Scope changes remount the template menu; the existing global template selection/autosave preferences remain shared. Diagnostic timings measure mathematical calculation and series update wall time; not CPU or memory. Calculation errors are isolated per imported mathematical indicator and its series is removed for that update. Source view displays the normalized declarative definition, not an original source archive. Local verification pending.
+## Importação e segurança
 
-## Primary persistence
-IndexedDB records are read on startup, validated and migrated from the compatibility cache only if absent. LocalStorage remains a best-effort recovery cache. In-session revisions prevent delayed hydration from overwriting a newer local edit. Library, history, chart overrides and admin settings are persisted. Multi-tab conflicts, crash durability and migration require browser tests before release.
+Abra Indicadores → Importar indicador (.ts). O arquivo deve conter exclusivamente `export default` seguido de um objeto JSON válido, com ponto e vírgula opcional. Limite de entrada: 64 KiB conforme as verificações do importador. Nenhum TypeScript arbitrário é executado.
 
-## Parameter and plot increment
-Bounded expression functions abs/sqrt/log/exp/floor/ceil/round and up to 20 named numeric parameters (p_ prefix) are interpreted without JavaScript execution. Custom math can render as line, area or histogram. Category and active filters and per-chart visibility are available. True separate panes and arbitrary TypeScript remain unsupported. Tests added, not run.
+```ts
+export default {
+  "sdk": 1,
+  "id": "typical-price",
+  "name": "Preço típico",
+  "version": "1.0.0",
+  "kind": "expression",
+  "expression": "(high+low+close)/3"
+};
+```
 
-## Calendar and session periods
-Weekly aggregation aligns to Monday UTC; calendar month aggregation uses actual month length, excludes incomplete or gapped buckets, and is computed from loaded chart history. HTF session candles support full session or session-relative intraday segments. Session lines remain visible even when projected candle has no viewport space. Independent external timeframe fetching remains unsupported.
+Tipos: `sma`, `ema`, `expression`, `session-candle`, `graphics`. Consulte [schema.ts](../src/lib/indicator-sdk/schema.ts) para o contrato completo e os valores padrão. Os identificadores internos permanecem em inglês.
 
-## Restricted runtime guard
-Imported expressions execute only through the bounded interpreter, with a 20,000-bar hard ceiling and cooperative 100 ms deadline checked every 64 bars. SMA/EMA duration is checked after calculation. Three consecutive failures pause the calculation until the hook is recreated (for example, toggling the indicator). Errors remain visible even when success diagnostics are disabled. This is capability restriction, not an arbitrary TypeScript sandbox or a hard browser memory/process limit. No imported code receives wallet, network or storage APIs. Local tests pending.
+Expressões: campos open, high, low, close, volume; operadores +, -, *, /, %, parênteses; funções abs, sqrt, log, exp, floor, ceil, round, sin, cos, tan, sign, log10. Até 20 parâmetros numéricos com prefixo p_. Limites do interpretador: 512 caracteres, 128 tokens e profundidade controlada de 32. Resultados não finitos não são desenhados. Não há acesso a propriedades arbitrárias, imports, rede, carteira ou armazenamento a partir da fórmula.
 
-## Drawing object lifecycle
-Graphics support optional stable IDs, individual updates/removal, visibility, three primitive layers, OHLC-relative price anchors and custom OHLC candle drawings. Mathematical indicators may carry graphics in addition to their plot. Independent overlay price scales are supported; true separate lower panes require a chart-library migration and are not implemented here. No arbitrary script execution is introduced. Local verification pending.
+## Biblioteca e edição
 
-## Manager phase
-A unified JSON backup contains definitions, history, both chart scopes and administrative settings. All sections are validated before restore; writes remain separate queued IndexedDB transactions, not atomic across stores. The manager supports original definition editing and selection of up to five saved revisions. Startup hydration guards prevent library and override changes during initial reads. Existing separate backup controls remain available. Browser migration and restore tests remain pending.
+Importar → visualizar prévia → instalar → ativar no gráfico. Busca, categorias, favoritos e filtros ativos/inativos. O menu de ações reúne duplicação, edição, código normalizado, exportação .ts, revisões, restauração e desinstalação.
 
-## Performance phase
-Per-chart bounded calculation cache (12 entries, 100,000 combined input/output points), exact OHLCV prefix comparison, incremental expression suffix calculations, shared aggregation, and unchanged-output rendering skip. SMA/EMA recompute when input changes to preserve rolling-window semantics. Runtime failure guards persist across ordinary React updates and reset on definition changes or deactivation. Diagnostics record ten recent errors per indicator and flag slow calculations. No measured benchmark or local test result is claimed.
+- Global: modifica a definição instalada. Personalizações compatíveis têm prioridade; alteração de versão pode tornar uma personalização inativa.
+- Individual: grava exclusivamente a personalização do gráfico principal ou secundário escolhido; o destino é fixado ao abrir o editor. Restaurar padrão remove apenas essa personalização.
+- A biblioteca suporta até 100 definições; cada gráfico suporta até 100 personalizações armazenadas. Limites de indicadores ativos são configuráveis separadamente na administração.
 
-## Template and replay phase
-Templates capture effective imported settings, validate before mutation and resolve version conflicts by keeping the installed definition while applying a chart-local snapshot. Secondary template selection and autosave state are separate from primary. Secondary templates do not change shared appearance preferences. Replay math and session primitives consume the supplied historical slice, rather than live series data. Native graphics still use the chart series for anchors. Full replay integration and UI verification remain pending.
+## Histórico e sessões HTF
 
-## Independent history
-Optional independent history uses the existing read-only market API, explicit exclusive end times (no extra chart subscriptions), a 16-entry request cache, at most six distinct periods per chart, and 30-second live refresh. Native intervals are requested directly; others derive from hourly or daily candles. Results are aligned to chart bars only after their source close. Replay uses the historical cursor, never wall-clock future candles. Missing history renders no output. Local verification pending.
+Matemática: linha, área e histograma. Agregações de 15, 30, 60, 120, 240, 360, 720, 1440, 10080 e 43200 minutos, além do período do gráfico (0). Semana inicia na segunda-feira e mês civil tem duração variável. Valores derivados completos são disponibilizados no fechamento correspondente.
 
-## HTF session lifecycle
-Session range freezes through closing and disabled weekdays, resets at the next eligible opening, and rejects missing or misaligned source bars when resolution is provided. Full-session boundary lines are independent of intraday HTF segments. Projection is anchored to the last contributing bar and stays inside the session and viewport where space permits. A dashed edge marker indicates offscreen closing time, not its actual chart coordinate. Preview uses actual sample OHLC extrema and configured offset/period. Local visual verification remains pending.
+Histórico independente: usa API de mercado somente para leitura, corte exclusivo em milissegundos, até 5.000 velas por consulta matemática, seis períodos distintos por gráfico e cache de 16 entradas com atualização ao vivo a cada 30 segundos. Períodos intermediários podem ser derivados de velas horárias e diárias. O replay restringe a consulta ao cursor histórico.
 
-## Regression protection
-Chart-derived HTF values are aligned at confirmed source close, replay graphics use only the historical slice, independent histories honor administrative limits and active math indicator selection, and cache entries use source-aware keys and LRU refresh. Recovery rejects concurrent edits. Added regression coverage for rewind, close-time alignment and executable imports. Native trading and wallet modules untouched. Local checks pending.
+HTF Candle Range: configure abertura, fechamento, fuso IANA, dias, sessão inteira ou segmento intradiário, semana e mês. Linhas de abertura/fechamento, extrema, preço inicial e vela projetada são configuráveis. O histórico independente da sessão usa resolução alinhada compatível com o orçamento de velas, paginação em blocos de até 5.000 e atualização de 15 segundos. Cobertura insuficiente não gera OHLC fictício. Projeções exigem espaço visual; extremos de velas agregadas não revelam o instante intrabar exato.
 
-## Resource diagnostics
-The worker queue is limited to four requests and each request to 20,000 candles. Cache diagnostics expose retained points and an approximate 64-byte-per-point budget estimate; this is not measured browser heap usage or a hard process memory limit. A browser Worker cannot enforce an independent absolute heap quota.
+Horários: manual, 24/7 UTC ou automático. O adaptador pode fornecer uma convenção recorrente; o automático atualiza a cada 60 segundos no modo ao vivo e usa a referência do replay. Sem metadados válidos, usa configuração manual. Hyperliquid declara convenção contínua 24/7 para mercados reconhecidos. Isso não equivale ao calendário da bolsa subjacente nem garante ausência de manutenção. `xyz:GOLD` é um contrato perpétuo HIP-3, não cotação spot XAU/USD. Consulte a [auditoria GOLD](XAUUSD_IMPLEMENTATION_AUDIT.md).
 
-## Session extensions
-Weekly and monthly civil-period options and a 24/7 UTC convention are available. The latter is not an official exchange calendar or underlying commodity schedule. Independent session history currently requests up to 5,000 closed one-minute bars, so long periods may be incomplete and intentionally hidden. Local validation and further long-history integration remain pending.
+Lacunas: contínuo 24/7 por padrão; política opcional de dias úteis UTC para fechamento conhecido de fim de semana. Não infere feriados. Intervalos incompletos ou OHLCV inválidos são rejeitados em agregações; séries personalizadas podem apresentar espaços vazios. Estados do histórico: carregando, atualizando, disponível, vazio, falha e limite.
 
-## Additional medium corrections
-The expression whitelist now includes trigonometric functions, sign, log10 and remainder. Drawing objects support line styles and an editor for creating all supported commands and validating their properties. Native indicators skip identical-input recomputation within the chart effect. Arbitrary executable TypeScript and independent heap limits remain intentionally unsupported.
+## Objetos gráficos e prévias
 
-## M05 independent lower panes
-Lightweight Charts 4 remains installed. Native RSI, MACD, ATR and STOCH are grouped in separate chart instances with independent right-hand scales; custom math indicators may select a lower pane and a height of 80–320px. Each child chart uses the parent candle timeline and synchronizes visible logical ranges in both directions. Panes are removed when unused and disposed with their chart. Price overlays and drawing primitives remain on the parent. Crosshair synchronization and visual alignment require local verification.
+Até 100 comandos declarativos: line, horizontal, vertical, box, text, arrow, table, candle. Propriedades de posição em deslocamento lógico de barras, preço absoluto ou âncora OHLC, multiplicador, largura, opacidade, cor, traçado, visibilidade e camada bottom/normal/top. IDs opcionais e únicos. Consulte [graphics.ts](../src/lib/indicator-sdk/graphics.ts).
 
-## M10 workspace backup
-Version 2 optionally includes saved chart templates and adapter-persisted drawings grouped by symbol. Version 1 remains accepted. Restore merges template names and drawing IDs, preserving unrelated records. All sections are validated before writes. Native adapter storage does not provide transactions, so failed restores attempt compensating rollback and report incomplete rollback. Export covers currently listed symbols and the persisted drawing index; unsaved secondary-chart drawings are not included. Wallet, account credentials, journal and orders are excluded. Local validation pending.
+A prévia usa velas fechadas do gráfico selecionado ou histórico independente conforme configuração. Amostra ilustrativa é uma opção explícita, identificada. A prévia SVG de objetos usa escala própria, amostragem de velas e abreviações em tabelas; não é uma reprodução pixel a pixel do gráfico principal. Âncoras indisponíveis são sinalizadas e deslocamentos futuros são bloqueados no replay. Previews não comprovam funcionamento do renderizador real.
 
-## M17 visual preferences
-Primary preferences retain their existing keys. Secondary preferences are stored in the same user-scoped preference store under chart.secondary.* with independent defaults. Settings dialogs and template snapshots apply to their own chart; lower panes follow their owning chart colors. Drawing interaction preferences are scoped as well. Existing primary settings remain unchanged. Local visual, persistence and template verification pending.
+## Painéis, templates e aparência
 
-## M19 market gaps
-Continuous 24/7 is the default, including Hyperliquid HIP-3; underlying oracle market closure is not an excuse to ignore missing exchange bars. An explicit UTC weekday-only aggregation policy supports known weekend closures, not exchange holidays or intraday schedules. Incomplete open intervals are rejected, invalid OHLCV is rejected for aggregation, and custom plots emit whitespace instead of indefinite stale values. Local validation pending.
+RSI, MACD, ATR e STOCH usam instâncias de gráfico inferiores; indicadores matemáticos importados podem escolher painel inferior com altura de 80–320 px, escala sobreposta independente ou preço principal. Lightweight Charts 4 permanece instalado. Sincronização de faixa lógica e alinhamento visual requerem teste local.
 
-## M20 independent HTF history
-Each enabled session indicator requests its own bounded session interval, using the finest supported aligned source resolution within the configured bar budget. Requests are paginated in blocks of up to 5,000 candles, deduplicated, and restricted to closed candles at the replay/live cutoff. Missing coverage is reported instead of fabricating OHLC. Live refresh runs every 15 seconds; it is not tick-level streaming. Calendar-period coverage and official exchange schedules receive further work in M21/M22. Local validation pending.
+Preferências do gráfico principal preservam suas chaves; secundário usa prefixo chart.secondary.* e padrões próprios. Templates capturam configurações efetivas, instalam definições ausentes e preservam versões já instaladas com snapshots individuais. Seleção e autosave são separados por gráfico. Validação de persistência e restauração visual pendente.
 
-## M21 weekly and monthly historical coverage
-Weekly HTF uses Monday boundaries and monthly HTF uses actual civil calendar months, including leap years. UTC 24/7 remains continuous; a manual calendar with explicit UTC weekday gap policy permits known weekend gaps but rejects missing open bars. Source resolution can fall back to aligned 4h or 1d candles within the configured bar budget. Completed derived weekly/monthly indicator values become available at the true calendar boundary, and monthly values expire at the next real month boundary rather than a fixed 31-day interval. Partial session projections are labeled. Coarser source bars identify the bar containing the extreme, not the exact intrabar timestamp. Exchange holidays and provider schedules remain M22. Local validation pending.
+## Administração e desempenho
 
-## M22 automatic market schedules
-The adapter contract optionally supplies a recurring session for a symbol at a given timestamp. Hyperliquid declares its continuous UTC trading convention for recognized markets, not the underlying oracle's exchange calendar. Automatic mode validates provider metadata, refreshes every minute in live mode, uses replay timestamps, and falls back to stored manual settings when metadata is unavailable. The provider contract currently represents recurring hours only; exchange holidays, exceptional closures and intraday maintenance intervals are not supplied by Hyperliquid and are not inferred. Local validation pending.
+Seções: limites de execução, desempenho e diagnóstico, segurança, armazenamento e recuperação. Limite ativo de 1–30 por gráfico (padrão 10); histórico de 100–20.000 velas (padrão 5.000). Aplicação explícita dos limites, não a cada digitação.
 
-## M23 market-data preview
-The indicator editor uses the selected chart's actual closed bars, or independent historical data according to the indicator configuration. Replay is bounded to the replay timestamp. Session previews use the session calculation and optional provider schedule. Illustrative candles require explicit selection and are labeled. Graphics-only commands retain a summary and require activation for full rendering. Local tests and visual verification pending.
+Cache de cálculo por gráfico: 12 entradas e orçamento de 100.000 pontos combinados. Reutilização de prefixos OHLCV, atualizações incrementais de expressões e médias quando aplicável, agregação compartilhada. Worker: fila de quatro requisições, 20.000 velas por entrada, timeout de dois segundos com encerramento do worker. Caminho síncrono possui verificações de tempo cooperativas; não há limite absoluto de heap independente. Diagnóstico registra tempo decorrido, modo, quantidade de velas, estimativa de cache (64 bytes por ponto) e até dez erros recentes. Não representa memória real ou benchmark de CPU. Três falhas consecutivas podem pausar um cálculo; desativar e reativar permite nova tentativa.
 
-## L01 interface em português
-Rótulos da biblioteca, editor, prévia, administração e backup traduzidos para pt-BR. Identificadores de esquema, valores dos selects, código importado e formatos persistidos permanecem inalterados. Mensagens técnicas adicionais serão tratadas em L06. Corrigido também um fragmento JSX malformado na área de altura do painel e cor. Validação local pendente.
+## Persistência, revisões e backups
 
-## L02 ações compactas
-A lista mantém ativação e favoritos visíveis; edição global, edição por gráfico, duplicação, revisões, código, restauração, exportação e desinstalação ficam em uma expansão de ações. Fechamento por clique externo ou Escape, confirmação de desinstalação preservada. Validação local pendente.
+IndexedDB e cache de recuperação localStorage com envelopes de revisão; hidratação valida os dados e compara revisões. A gravação comum usa fila assíncrona; erros aparecem no diagnóstico. Restauração unificada usa uma transação IndexedDB para estados do SDK. Modelos e desenhos de adaptadores externos não têm transação comum; há tentativa de rollback compensatório em caso de falha.
 
-## L03 organização administrativa
-Painel administrativo separado em limites globais, desempenho por gráfico, segurança e recuperação. Limites passam por validação antes de aplicação explícita; cancelar alterações não modifica a configuração persistida. Mantidas as ações de diagnóstico e recuperação, com escopo e estados de operação identificados. Validação local pendente.
+Até 20 revisões por indicador. Novas revisões registram o instante de arquivamento; ordenação decrescente, empates estáveis e revisões legadas sem data exibidas ao final. Restaurar arquiva a definição substituída. O formato .ts não contém metadados de revisão.
 
-## L04 escopo da edição
-O editor fixa o destino ao abrir (biblioteca global, gráfico principal ou secundário), apresenta aviso e botão de gravação específicos e identifica personalizações ativas ou de versão anterior na lista. A edição individual não grava na biblioteca; alterações de versão concorrentes são rejeitadas. Restaurar configuração individual remove somente o override do gráfico escolhido, mediante confirmação. A definição global continua sujeita às regras existentes de compatibilidade de versão. Validação local pendente.
+Central de backups:
+- Indicadores e configurações: JSON versão 1, biblioteca, revisões, personalizações e administração.
+- Espaço de trabalho: JSON versão 2, inclui modelos e desenhos persistidos. Mescla modelos por nome e desenhos por ID.
+- Avançado: biblioteca/revisões e personalizações isoladas; colagem JSON manual.
+- Validação e confirmação antes de restauração. Exportações nomeadas com data/hora UTC.
 
-## L05 estados do histórico
-Estados por indicador, ativo e gráfico: carregando, atualizando, disponível, vazio, erro e limite. Consultas independentes e sessões publicam estados separados dos diagnósticos de cálculo; resultados obsoletos são descartados. A prévia mostra carregamento e permite nova tentativa. Validação local pendente.
+Não inclui carteira, credenciais, ordens, journal nem desenhos secundários não salvos. A cobertura de desenhos depende dos símbolos e índice persistidos. Backups antigos são lidos pela versão atual, mas versões antigas do aplicativo podem não compreender o novo envelope de revisão. Limite do backup unificado: 16.000.000 conforme verificações de tamanho; biblioteca isolada possui limite próprio. Verifique o diagnóstico antes de considerar uma gravação parcial confirmada.
 
-## L06 mensagens de erro
-Aviso reutilizável em português com categoria, orientação e detalhes técnicos recolhíveis. Aplicado à biblioteca, prévia, objetos gráficos e administração, sem modificar contratos de dados ou regras de execução. Detalhes limitados e URLs/credenciais comuns ocultadas na apresentação. Testes adicionados; validação local pendente.
+## Limitações e validação
 
-## L07 central de backups
-Um painel reúne exportação de espaço de trabalho e indicadores, seleção e validação de arquivos antes da restauração, resumo de conteúdo e confirmação do escopo. Exportações parciais e colagem JSON ficam em opções avançadas. Formatos anteriores preservados. Nomes de arquivos incluem data e hora UTC. Operações parciais mantêm o mecanismo de persistência existente; a confirmação de gravação depende do diagnóstico de armazenamento. Validação local pendente.
+Não executar TypeScript arbitrário, não inventar candles, não apresentar amostras como feed ao vivo e não tratar GOLD perpétuo como spot. Calendários excepcionais, memória real, concorrência entre abas e durabilidade após falhas não estão certificados.
 
-## L08 prévias gráficas
-Prévia SVG separada para os oito tipos de objetos, inclusive indicadores matemáticos com gráficos adicionais. Respeita âncoras OHLC, multiplicador, deslocamento, visibilidade, camadas, cor, opacidade e traçado; sinaliza âncoras indisponíveis e bloqueia deslocamentos futuros no replay. Escala própria, amostragem visual de velas e texto de tabela abreviado; não substitui validação do renderizador principal. Validação local pendente.
-
-## L09 datas das revisões
-Novas revisões registram o instante de arquivamento da definição substituída, em epoch ms. A lista ordena por data decrescente, mantém ordem estável nos empates e exibe revisões legadas sem data depois das datadas. Backups antigos são aceitos e convertidos sem atribuir datas fictícias; backups novos preservam metadados de revisão. A definição exportada em .ts permanece sem metadados de arquivamento. A restauração seleciona a revisão original e rejeita seleção obsoleta, arquivando a definição atual. Limite de 20 mantido. Validação local pendente.
+O [roteiro de validação local](indicator-validation.md) reúne os testes pendentes desta rodada. O [histórico de evolução](indicator-sdk-history.md) preserva os registros anteriores; afirmações antigas descrevem seu momento de implementação, não o estado atual. O protocolo obrigatório continua em [AGENTS.md](../AGENTS.md). Nenhum GitHub Actions, merge ou deploy é autorizado por esta documentação.

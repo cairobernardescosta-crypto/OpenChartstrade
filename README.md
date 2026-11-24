@@ -89,6 +89,9 @@ a theme, a bug report or a docs fix — see
   saveable **chart templates** — all persisted to `localStorage`.
 
 ### 📐 Indicators
+
+For this fork’s imported indicator SDK, see the [consolidated guide (pt-BR)](docs/indicator-sdk.md) and [local validation checklist](docs/indicator-validation.md). These accumulated changes are pending local verification.
+
 SMA, EMA, RSI, MACD, Bollinger Bands, ATR, Stochastic and VWAP, added from the
 toolbar and removable individually or in bulk from the chart context menu.
 
