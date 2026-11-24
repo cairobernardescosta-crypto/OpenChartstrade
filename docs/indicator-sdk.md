@@ -89,3 +89,6 @@ Não inclui carteira, credenciais, ordens, journal nem desenhos secundários nã
 Não executar TypeScript arbitrário, não inventar candles, não apresentar amostras como feed ao vivo e não tratar GOLD perpétuo como spot. Calendários excepcionais, memória real, concorrência entre abas e durabilidade após falhas não estão certificados.
 
 O [roteiro de validação local](indicator-validation.md) reúne os testes pendentes desta rodada. O [histórico de evolução](indicator-sdk-history.md) preserva os registros anteriores; afirmações antigas descrevem seu momento de implementação, não o estado atual. O protocolo obrigatório continua em [AGENTS.md](../AGENTS.md). Nenhum GitHub Actions, merge ou deploy é autorizado por esta documentação.
+
+## L11 identificação da fonte
+A biblioteca indica o provedor ativo e a fonte configurada por indicador; a prévia identifica o caminho efetivamente consultado, ativo, período, quantidade e corte temporal. Demonstração e amostras sintéticas não recebem rótulo de feed ao vivo. Caches de histórico independente e de sessão são recriados ao trocar o adaptador, e resultados anteriores são rejeitados por identidade. A identificação do provedor não certifica disponibilidade ou atualidade de suas cotações. Validação local pendente.

@@ -1,41 +1,42 @@
-import {useEffect,useState} from "react";
+import {useEffect,useState,useMemo} from "react";
 import {GraphicPreview} from "./GraphicPreview";
 import {IndicatorErrorNotice} from "./IndicatorErrorNotice";
 import {parameterValues,indicatorSchema,type ImportedIndicator} from "../../../lib/indicator-sdk/schema";
 import {expressionPoints} from "../../../lib/indicator-sdk/expression";
 import {sessionPeriodLabel,sessionRange} from "../../../lib/indicator-sdk/session";
 import {sma,ema,type CandleData,type IndicatorPoint} from "../../../lib/indicators";
-import {api} from "../../../services/api";
-import {getAdapter} from "../../../adapter/registry";
+import {useMarketAdapter,providerLabel,dataPathLabel,resolutionLabel,type DataPath} from "../../../lib/indicator-sdk/data-source";
 import {resolveMarketSchedule} from "../../../lib/indicator-sdk/market-schedule";
 import {SessionHistoryCache} from "../../../lib/indicator-sdk/session-history";
 import {IndependentHistoryCache} from "../../../lib/indicator-sdk/independent-history";
 import {aggregateCompleted} from "../../../lib/indicator-sdk/aggregate";
 import {normalizePreviewCandles,previewStep} from "../../../lib/indicator-sdk/preview-data";
 import {useIndicatorAdmin} from "../../../lib/indicator-sdk/admin";
-const sessionCache=new SessionHistoryCache((symbol,tf,limit,range)=>api.getCandles(symbol,tf,limit,range));
-const historyCache=new IndependentHistoryCache((symbol,tf,limit,toMs)=>api.getCandles(symbol,tf,limit,{toMs}));
+
 const samples:CandleData[]=Array.from({length:100},(_,i)=>{const open=100+Math.sin(i/6)*5+i/10;const close=open+Math.sin(i*1.3)*2;return {time:Date.UTC(2026,0,5)/1000+i*60,open,close,high:Math.max(open,close)+1,low:Math.min(open,close)-1,volume:100+i};});
 type Props={draft:ImportedIndicator;symbol?:string;timeframe?:string;replay?:boolean;chartCandles?:readonly CandleData[]};
-type Preview={rows:CandleData[];step:number;cutoff:number;config:ImportedIndicator;label:string;error:string;aggregated:boolean};
+type Preview={rows:CandleData[];step:number;cutoff:number;config:ImportedIndicator;label:string;error:string;aggregated:boolean;path:DataPath;provider:string};
 export function IndicatorPreview({draft,symbol="",timeframe="1m",replay=false,chartCandles}:Props){
- const admin=useIndicatorAdmin();const [sample,setSample]=useState(false);const [retry,setRetry]=useState(0);const [state,setState]=useState<{key:string;value:Preview}|null>(null);
+ const adapter=useMarketAdapter();
+ const sessionCache=useMemo(()=>new SessionHistoryCache((symbol,tf,limit,range)=>adapter?adapter.marketData.getCandles({symbol,timeframe:tf,limit,...range}):Promise.reject(Error("Provedor indisponível"))),[adapter]);
+ const historyCache=useMemo(()=>new IndependentHistoryCache((symbol,tf,limit,toMs)=>adapter?adapter.marketData.getCandles({symbol,timeframe:tf,limit,toMs}):Promise.reject(Error("Provedor indisponível"))),[adapter]);
+ const admin=useIndicatorAdmin();const [sample,setSample]=useState(false);const [retry,setRetry]=useState(0);const [state,setState]=useState<{key:string;adapter:typeof adapter;value:Preview}|null>(null);
  const last=chartCandles?.[chartCandles.length-1]?.time;const replayCutoff=replay?(last??0):0;
  const configKey=JSON.stringify(draft);const key=JSON.stringify([configKey,symbol,timeframe,replay,replayCutoff,sample,admin.maxBars,retry]);
  useEffect(()=>{const parsed=indicatorSchema.safeParse(JSON.parse(configKey));if(!parsed.success)return;let disposed=false;const load=async()=>{
- let c=parsed.data;let step=previewStep(timeframe);const cutoff=replay?replayCutoff:Math.floor(Date.now()/1000);let rows:CandleData[]=[];let error="";let aggregated=false;let label=sample?"Amostra ilustrativa · não representa dados de mercado":replay?"Replay · velas fechadas":symbol+" · "+timeframe+" · histórico de mercado";
+ let c=parsed.data;let step=previewStep(timeframe);const cutoff=replay?replayCutoff:Math.floor(Date.now()/1000);let rows:CandleData[]=[];let error="";let aggregated=false;let path:DataPath=sample?"sample":"chart";let label=sample?"Amostra ilustrativa · não representa dados de mercado":replay?"Replay · velas fechadas":symbol+" · "+timeframe+" · histórico de mercado";
  try{if(sample){rows=samples;step=60;c={...c,sessionSchedule:"utc-24h",sessionMinutes:"session",aggregation:0};}
  else if(!symbol||!cutoff)throw Error("Nenhum histórico do mercado selecionado");
- else if(c.kind==="session-candle"){if(c.sessionSchedule==="automatic"){const resolved=await resolveMarketSchedule(getAdapter().marketData,symbol,c,cutoff*1000);c=resolved.config;label+=" · "+resolved.message;}if(c.historySource==="independent"){const result=await sessionCache.get(symbol,c,cutoff,admin.maxBars);rows=result.rows;step=result.step;error=result.error;}else rows=normalizePreviewCandles(chartCandles??[],step,cutoff,admin.maxBars);}
- else if(c.historySource==="independent"&&c.aggregation){rows=await historyCache.get(symbol,c.aggregation,cutoff,c.gapPolicy);aggregated=true;label+=" · HTF independente";}
+ else if(c.kind==="session-candle"){if(c.sessionSchedule==="automatic"){const resolved=await resolveMarketSchedule(adapter!.marketData,symbol,c,cutoff*1000);c=resolved.config;label+=" · "+resolved.message;}if(c.historySource==="independent"){path="independent";const result=await sessionCache.get(symbol,c,cutoff,admin.maxBars);rows=result.rows;step=result.step;error=result.error;}else rows=normalizePreviewCandles(chartCandles??[],step,cutoff,admin.maxBars);}
+ else if(c.kind!=="graphics"&&c.historySource==="independent"&&c.aggregation){path="independent";rows=await historyCache.get(symbol,c.aggregation,cutoff,c.gapPolicy);aggregated=true;label+=" · HTF independente";}
  else if(replay||chartCandles?.length){rows=normalizePreviewCandles(chartCandles??[],step,cutoff,admin.maxBars);}
- else rows=normalizePreviewCandles(await api.getCandles(symbol,timeframe,Math.min(admin.maxBars,5000),{toMs:cutoff*1000}),step,cutoff,admin.maxBars);
- }catch(e){error=String(e);}if(!disposed)setState({key,value:{rows,step,cutoff:sample?samples[samples.length-1]!.time+60:cutoff,config:c,label,error,aggregated}});};
+ else {path="provider";if(!adapter)throw Error("Provedor indisponível");rows=normalizePreviewCandles(await adapter.marketData.getCandles({symbol,timeframe,limit:Math.min(admin.maxBars,5000),toMs:cutoff*1000}),step,cutoff,admin.maxBars);}
+ }catch(e){error=String(e);}if(!disposed)setState({key,adapter,value:{path,provider:sample?"Gerador de amostra":providerLabel(adapter),rows,step,cutoff:sample?samples[samples.length-1]!.time+60:cutoff,config:c,label,error,aggregated}});};
  const timer=setTimeout(()=>void load(),250);return()=>{disposed=true;clearTimeout(timer);};
- },[key,configKey,symbol,timeframe,replay,replayCutoff,sample,admin.maxBars,chartCandles,retry]);
+ },[key,configKey,symbol,timeframe,replay,replayCutoff,sample,admin.maxBars,chartCandles,retry,adapter,sessionCache,historyCache]);
  const result=indicatorSchema.safeParse(draft);if(!result.success)return <p className="text-xs text-muted-foreground">Corrija as configurações inválidas para visualizar a prévia.</p>;
- const value=state?.key===key?state.value:null;
- return <div className="space-y-1"><label className="block"><input type="checkbox" checked={sample} onChange={e=>setSample(e.target.checked)}/> Amostra ilustrativa</label>{!value?<div role="status" aria-busy="true" className="space-y-2"><p>Carregando histórico para a prévia…</p><div className="h-24 animate-pulse rounded bg-secondary/50"/></div>:<><p className="text-muted-foreground">{value.label} · {value.rows.length} velas</p>{value.error?<div className="space-y-1"><IndicatorErrorNotice error={value.error} context="history"/><button type="button" className="rounded border border-border px-2 py-1" onClick={()=>setRetry(v=>v+1)}>Tentar novamente</button></div>:<><PreviewPlot data={value}/>{value.config.graphics.length>0&&<GraphicPreview rows={value.rows} graphics={value.config.graphics} replay={replay&&!sample}/>}{!value.rows.length&&<button type="button" className="rounded border border-border px-2 py-1" onClick={()=>setRetry(v=>v+1)}>Consultar novamente</button>}</>}</>}</div>;
+ const value=state?.key===key&&state.adapter===adapter?state.value:null;
+ return <div className="space-y-1"><label className="block"><input type="checkbox" checked={sample} onChange={e=>setSample(e.target.checked)}/> Amostra ilustrativa</label>{!value?<div role="status" aria-busy="true" className="space-y-2"><p>Carregando histórico para a prévia…</p><div className="h-24 animate-pulse rounded bg-secondary/50"/></div>:<><div className="rounded border border-border p-2 text-muted-foreground space-y-1"><p>Fonte: {value.provider}</p><p>{dataPathLabel(value.path,replay&&!sample)}</p>{!sample&&<p>Ativo: {symbol} · gráfico: {timeframe}</p>}<p>{value.path==="independent"&&value.aggregated?"Período agregado: "+(value.config.aggregation===43200?"Mês civil":resolutionLabel(value.config.aggregation*60)):"Resolução: "+resolutionLabel(value.step)} · {value.rows.length} velas</p><p>Corte: {new Date(value.cutoff*1000).toLocaleString("pt-BR")}</p>{value.config.kind==="session-candle"&&<p>{value.label}</p>}</div>{value.error?<div className="space-y-1"><IndicatorErrorNotice error={value.error} context="history"/><button type="button" className="rounded border border-border px-2 py-1" onClick={()=>setRetry(v=>v+1)}>Tentar novamente</button></div>:<><PreviewPlot data={value}/>{value.config.graphics.length>0&&<GraphicPreview rows={value.rows} graphics={value.config.graphics} replay={replay&&!sample}/>}{!value.rows.length&&<button type="button" className="rounded border border-border px-2 py-1" onClick={()=>setRetry(v=>v+1)}>Consultar novamente</button>}</>}</>}</div>;
 }
 function PreviewPlot({data}:{data:Preview}){
  const {rows,step,cutoff,config:c,aggregated}=data;

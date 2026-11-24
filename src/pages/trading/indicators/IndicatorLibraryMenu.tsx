@@ -1,4 +1,5 @@
 import { useState } from "react";
+import {useMarketAdapter,providerLabel,configuredPath,dataPathLabel} from "../../../lib/indicator-sdk/data-source";
 import {IndicatorErrorNotice} from "./IndicatorErrorNotice";
 import {IndicatorBackupPanel} from "./IndicatorBackupPanel";
 import {useHistoryStatuses,historyStatusLabel} from "../../../lib/indicator-sdk/history-status";
@@ -15,6 +16,7 @@ import { useIndicatorLibrary, installIndicator, updateIndicator, removeIndicator
 
 export function IndicatorLibraryMenu({active,toggle,scope="primary",symbol="",timeframe="1m",replay=false,previewCandles}:{active: IndicatorType[];toggle:(type:IndicatorType)=>void;scope?:ChartScope;symbol?:string;timeframe?:string;replay?:boolean;previewCandles?:readonly CandleData[]}) {
   const library=useIndicatorLibrary();
+  const adapter=useMarketAdapter();
   const historyStatuses=useHistoryStatuses();
   const admin=useIndicatorAdmin();
   const storageError=usePersistenceError();
@@ -79,12 +81,14 @@ export function IndicatorLibraryMenu({active,toggle,scope="primary",symbol="",ti
     <select aria-label="Filtrar indicadores" className="bg-background text-xs" value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">Todos</option><option value="active">Ativos</option><option value="inactive">Inativos</option>{[...new Set(library.map(x=>x.category))].map(c=><option key={c} value={"category:"+c}>{c}</option>)}</select>
     {library.filter(x=>(!favorites||x.favorite)&&x.name.toLowerCase().includes(query.toLowerCase())&&(filter==="all"||(filter==="active"&&active.includes(`custom:${x.id}`))||(filter==="inactive"&&!active.includes(`custom:${x.id}`))||filter==="category:"+x.category)).map(x=>{
       const id:IndicatorType=`custom:${x.id}`;
+      const effective=resolveIndicator(x,overrides);
       const hasOverride=overrides.some(o=>o.id===x.id&&(o.snapshotBaseVersion??o.version)===x.version);
       const staleOverride=!hasOverride&&overrides.some(o=>o.id===x.id);
       const history=active.includes(id)?historyStatuses.find(v=>v.scope===scope&&v.symbol===symbol&&v.id===x.id):undefined;
       return <div key={x.id} className="flex flex-wrap gap-2 items-center text-xs px-1 py-1 border-b border-border">
         <button className="flex-1 text-left truncate" aria-pressed={active.includes(id)} onClick={()=>attempt(()=>{if(!active.includes(id)&&active.filter(x=>x.startsWith("custom:")).length>=admin.maxActive)throw new Error("Limite de indicadores ativos atingido");toggle(id);})}>{active.includes(id)?"✓ ":"+ "}{x.name}<span className="block text-[10px] text-muted-foreground">{hasOverride?"Personalizado · "+chartLabel:staleOverride?"Global · personalização de versão anterior":"Definição global"}</span></button>
         <button aria-label={"Favoritar "+x.name} onClick={()=>attempt(()=>setIndicatorFavorite(x.id,!x.favorite))}>{x.favorite?"★":"☆"}</button>
+        {active.includes(id)&&<p className="basis-full text-[10px] text-muted-foreground break-words">Fonte configurada: {providerLabel(adapter)} · {symbol} · {dataPathLabel(configuredPath(effective),replay)}{configuredPath(effective)==="chart"?" · "+timeframe:""}</p>}
         {history&&<div role={history.phase==="error"?"alert":"status"} className="basis-full text-[10px] text-muted-foreground break-words"><span className={history.phase==="loading"||history.phase==="refreshing"?"animate-pulse":history.phase==="error"?"text-red-400":""}>{historyStatusLabel(history.phase)}</span>{history.bars>0&&<span> · {history.bars} velas</span>}{history.message&&(history.phase==="error"?<IndicatorErrorNotice error={history.message} context="history"/>:<p>{history.message}</p>)}{history.phase==="ready"&&<span> · {new Date(history.updatedAt).toLocaleTimeString("pt-BR")}</span>}</div>}
         <IndicatorActions name={x.name} actions={[
           {label:"Editar neste gráfico",run:()=>{setEditTarget(scope);setDraft(resolveIndicator(x,overrides));}},

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState,useMemo } from "react";
 import type { IChartApi, ISeriesApi, CandlestickData, Time } from "lightweight-charts";
 import { LineStyle } from "lightweight-charts";
 import {
@@ -23,7 +23,8 @@ import {IndicatorWorkerClient} from "../../lib/indicator-sdk/worker-client";
 import {RuntimeGuard} from "../../lib/indicator-sdk/runtime";
 import { useIndicatorLibrary } from "../../lib/indicator-sdk/storage";
 import {GraphicPrimitive} from "../../lib/indicator-sdk/graphic-renderer";
-import {getAdapter,onAdapterChange} from "../../adapter/registry";
+import {getAdapter} from "../../adapter/registry";
+import {useMarketAdapter,adapterIdentity} from "../../lib/indicator-sdk/data-source";
 import {resolveMarketSchedule,type ResolvedMarketSchedule} from "../../lib/indicator-sdk/market-schedule";
 import {SessionHistoryCache,type SessionHistory} from "../../lib/indicator-sdk/session-history";
 import type {ImportedIndicator} from "../../lib/indicator-sdk/schema";
@@ -32,12 +33,10 @@ import {calendarPeriodEnd} from "../../lib/indicator-sdk/aggregate";
 import {inspectGaps,plotWithGaps} from "../../lib/indicator-sdk/market-gaps";
 import {IndependentHistoryCache,historyPlan,historyMaxAge,historyPointExpiry} from "../../lib/indicator-sdk/independent-history";
 import type {CandleData} from "../../lib/indicators";
-import {api} from "../../services/api.ts";
 import {IndicatorPanes,nativePaneKey,type PaneColors} from "./indicator-panes";
 import { CHART_COLORS } from "./constants.ts";
 
-const sessionHistoryCache=new SessionHistoryCache((symbol,timeframe,limit,range)=>api.getCandles(symbol,timeframe,limit,range));
-const independentHistory=new IndependentHistoryCache((symbol,timeframe,limit,toMs)=>api.getCandles(symbol,timeframe,limit,{toMs}));
+
 
 export function useIndicators(
   chartRef: React.RefObject<IChartApi | null>,
@@ -65,6 +64,10 @@ export function useIndicators(
   const aggregationRef=useRef(new AggregationCache());
   const guardRef=useRef(new RuntimeGuard());
   const signaturesRef=useRef(new Map<string,string>());
+  const adapter=useMarketAdapter();
+  const adapterToken=adapterIdentity(adapter);
+  const sessionHistoryCache=useMemo(()=>new SessionHistoryCache((symbol,timeframe,limit,range)=>adapter?adapter.marketData.getCandles({symbol,timeframe,limit,...range}):Promise.reject(Error("Provedor indisponível"))),[adapter]);
+  const independentHistory=useMemo(()=>new IndependentHistoryCache((symbol,timeframe,limit,toMs)=>adapter?adapter.marketData.getCandles({symbol,timeframe,limit,toMs}):Promise.reject(Error("Provedor indisponível"))),[adapter]);
   const library = useIndicatorLibrary();
   const admin = useIndicatorAdmin();
   const overrides = useOverrides(scope);
@@ -78,7 +81,7 @@ export function useIndicators(
   const periodKey=periods.join(",");
   const lastTime=chartData[chartData.length-1]?.time;
   const replayCutoff=isReplaying&&typeof lastTime==="number"?lastTime:0;
-  const historyKey=JSON.stringify([symbol,periodKey,isReplaying,replayCutoff]);
+  const historyKey=JSON.stringify([symbol,periodKey,isReplaying,replayCutoff,adapterToken]);
   useEffect(()=>{if(!symbol||!periodKey)return;let stopped=false;let running=false;let loaded=false;
     const definitions=(JSON.parse(historyDefinitions) as ImportedIndicator[]).filter(x=>x.kind!=="session-candle");
     const refresh=async()=>{if(running)return;running=true;try{
@@ -91,7 +94,7 @@ export function useIndicators(
       for(const entry of definitions){const id=entry.aggregation+":"+entry.gapPolicy;if(!periodKey.split(",").includes(id))continue;const bars=rows[id]?.length??0;publishHistory(scope,symbol,entry.id,historyPhase(bars,errors[id]),bars,errors[id]);}
     }finally{running=false;}};
     void refresh();const timer=isReplaying?undefined:setInterval(()=>void refresh(),30000);return()=>{stopped=true;if(timer!==undefined)clearInterval(timer);};
-  },[symbol,periodKey,isReplaying,replayCutoff,historyKey,historyDefinitions,scope]);
+  },[symbol,periodKey,isReplaying,replayCutoff,historyKey,historyDefinitions,scope,independentHistory]);
 
   useEffect(() => {
     if (!chartRef.current || !candleSeriesRef.current) return;
@@ -360,23 +363,21 @@ export function useIndicators(
   useEffect(()=>{const chart=chartRef.current;const seriesMap=indicatorSeriesRef.current;const cache=cacheRef.current;const guard=guardRef.current;const signatures=signaturesRef.current;const owners=ownersRef.current;return()=>{if(chart)for(const [key,series] of seriesMap){try{(owners.get(key)??chart).removeSeries(series);}catch{/* disposed */}}owners.clear();seriesMap.clear();paneManagerRef.current?.dispose();paneManagerRef.current=null;cache.clear();guard.reset();signatures.clear();workerRef.current?.stop();workerRef.current=null;};},[chartEpoch,chartRef]);
 
   const replaySlice=isReplaying?chartData:undefined;
-  const [adapterRevision,setAdapterRevision]=useState(0);
-  useEffect(()=>onAdapterChange(()=>setAdapterRevision(v=>v+1)),[]);
   const automaticDefinitions=JSON.stringify(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind==="session-candle"&&x.sessionSchedule==="automatic"));
-  const scheduleKey=JSON.stringify([symbol,isReplaying,replayCutoff,automaticDefinitions,adapterRevision]);
+  const scheduleKey=JSON.stringify([symbol,isReplaying,replayCutoff,automaticDefinitions,adapterToken]);
   const [schedules,setSchedules]=useState<{key:string;entries:Record<string,ResolvedMarketSchedule>}>({key:"",entries:{}});
   useEffect(()=>{const entries=JSON.parse(automaticDefinitions) as ImportedIndicator[];if(!entries.length||!symbol)return;let disposed=false;let busy=false;const refresh=async()=>{if(busy)return;busy=true;try{const cutoff=isReplaying?replayCutoff*1000:Date.now();const values:Record<string,ResolvedMarketSchedule>={};for(const entry of entries){if(disposed)return;values[entry.id]=await resolveMarketSchedule(getAdapter().marketData,symbol,entry,cutoff);}if(!disposed)setSchedules({key:scheduleKey,entries:values});}catch{if(!disposed)setSchedules({key:scheduleKey,entries:Object.fromEntries(entries.map(entry=>[entry.id,{config:{...entry,sessionSchedule:"manual" as const},message:"Provider unavailable — manual fallback",fallback:true}]))});}finally{busy=false;}};void refresh();const timer=isReplaying?undefined:setInterval(()=>void refresh(),60000);return()=>{disposed=true;if(timer!==undefined)clearInterval(timer);};},[automaticDefinitions,symbol,isReplaying,replayCutoff,scheduleKey]);
   useEffect(()=>{if(schedules.key!==scheduleKey)return;for(const [id,value] of Object.entries(schedules.entries))if(value.fallback)reportIndicator(scope,id,0,0,value.message);},[schedules,scheduleKey,scope]);
   const [sessionHistory,setSessionHistory]=useState<{key:string;entries:Record<string,SessionHistory>}>({key:"",entries:{}});
   const sessionDefinitions=JSON.stringify(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind==="session-candle"&&x.historySource==="independent").flatMap(x=>x.sessionSchedule!=="automatic"?[x]:schedules.key===scheduleKey&&schedules.entries[x.id]?[schedules.entries[x.id]!.config]:[]));
-  const sessionKey=JSON.stringify([symbol,isReplaying,replayCutoff,sessionDefinitions,admin.maxBars]);
+  const sessionKey=JSON.stringify([symbol,isReplaying,replayCutoff,sessionDefinitions,admin.maxBars,adapterToken]);
   useEffect(()=>{const entries=JSON.parse(sessionDefinitions) as ImportedIndicator[];if(!entries.length||!symbol)return;let disposed=false;let busy=false;let loaded=false;
     const refresh=async()=>{if(busy)return;busy=true;try{const cutoff=isReplaying?replayCutoff:Math.floor(Date.now()/1000);if(!cutoff)return;
       const results:Record<string,SessionHistory>={};for(const entry of entries){if(disposed)return;publishHistory(scope,symbol,entry.id,loaded?"refreshing":"loading");try{results[entry.id]=await sessionHistoryCache.get(symbol,entry,cutoff,admin.maxBars);}catch(e){results[entry.id]={rows:[],step:60,error:String(e),coveredThrough:0};}}
       if(!disposed){setSessionHistory({key:sessionKey,entries:results});loaded=true;for(const entry of entries){const result=results[entry.id]!;const waiting=result.error==="Aguardando a primeira vela fechada";const limited=result.error==="A sessão excede o limite de histórico disponível";publishHistory(scope,symbol,entry.id,waiting?"empty":limited?"limited":historyPhase(result.rows.length,result.error),result.rows.length,result.error);if(!waiting)reportIndicator(scope,entry.id,0,result.rows.length,result.error);}}
     }finally{busy=false;}};
     void refresh();const timer=isReplaying?undefined:setInterval(()=>void refresh(),15000);return()=>{disposed=true;if(timer!==undefined)clearInterval(timer);};
-  },[sessionDefinitions,symbol,isReplaying,replayCutoff,sessionKey,admin.maxBars,scope]);
+  },[sessionDefinitions,symbol,isReplaying,replayCutoff,sessionKey,admin.maxBars,scope,sessionHistoryCache]);
   useEffect(() => {
     const series = candleSeriesRef.current;
     if (!series) return;
