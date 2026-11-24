@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { compileExpression } from "./expression";
 
 const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 const id = z.string().regex(/^[a-z][a-z0-9-]{0,63}$/);
@@ -8,7 +9,17 @@ export const indicatorSchema = z.object({
   name: z.string().trim().min(1).max(80),
   version: z.string().regex(/^\d+\.\d+\.\d+$/),
   description: z.string().max(500).default(""),
-  kind: z.enum(["sma", "ema", "session-candle"]),
+  kind: z.enum(["sma", "ema", "session-candle", "expression"]),
+  expression: z.string().max(512).default("close"),
+  favorite: z.boolean().default(false),
+  author: z.string().max(80).default(""),
+  opacity: z.number().min(0.1).max(1).default(1),
+  days: z.array(z.number().int().min(0).max(6)).max(7).default([0,1,2,3,4,5,6]),
+  showWicks: z.boolean().default(true),
+  showLabels: z.boolean().default(true),
+  showOpenPrice: z.boolean().default(true),
+  showCandle: z.boolean().default(true),
+  lineWidth: z.number().int().min(1).max(5).default(1),
   period: z.number().int().min(1).max(5000).default(20),
   open: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default("18:00"),
   close: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default("17:00"),
@@ -23,7 +34,7 @@ export const indicatorSchema = z.object({
   showOpen: z.boolean().default(true),
   showClose: z.boolean().default(true),
   showHighLow: z.boolean().default(true),
-}).strict();
+}).strict().superRefine((value,ctx)=>{if(value.kind==="expression"){try{compileExpression(value.expression);}catch(e){ctx.addIssue({code:"custom",path:["expression"],message:String(e)});}}});
 
 export type ImportedIndicator = z.infer<typeof indicatorSchema>;
 

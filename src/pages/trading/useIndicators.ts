@@ -14,6 +14,7 @@ import {
   type IndicatorType,
 } from "../../lib/indicators.ts";
 import { toIndicatorCandles } from "./utils.ts";
+import { expressionPoints } from "../../lib/indicator-sdk/expression";
 import { useIndicatorLibrary } from "../../lib/indicator-sdk/storage";
 import { SessionCandlePrimitive } from "../../lib/indicator-sdk/renderer";
 import { CHART_COLORS } from "./constants.ts";
@@ -24,6 +25,7 @@ export function useIndicators(
   chartData: CandlestickData<Time>[],
   activeIndicators: IndicatorType[],
   isDark: boolean,
+  volumeData: readonly {time:Time;value:number}[] = [],
 ): void {
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<"Line"> | ISeriesApi<"Histogram">>>(
     new Map(),
@@ -35,7 +37,7 @@ export function useIndicators(
     if (!chartRef.current || !candleSeriesRef.current || chartData.length === 0) return;
 
     const chart = chartRef.current;
-    const indCandles = toIndicatorCandles(chartData);
+    const indCandles = toIndicatorCandles(chartData, volumeData);
 
     // Remove old indicator series
     for (const [_key, series] of indicatorSeriesRef.current) {
@@ -51,7 +53,7 @@ export function useIndicators(
       if (type.startsWith("custom:")) {
         const entry = library.find(x => `custom:${x.id}` === type);
         if (entry && entry.kind !== "session-candle") {
-          const data = (entry.kind === "sma" ? sma : ema)(indCandles, entry.period);
+          const data = entry.kind === "expression" ? expressionPoints(indCandles,entry.expression) : (entry.kind === "sma" ? sma : ema)(indCandles, entry.period);
           const s = chart.addLineSeries({ color: entry.color, lineWidth: 1, priceScaleId: "right" });
           s.setData(data.map(p => ({ time: p.time as Time, value: p.value })));
           indicatorSeriesRef.current.set(type, s);
@@ -213,7 +215,7 @@ export function useIndicators(
     }
     // chartRef/candleSeriesRef are stable refs; colors derived from isDark dep.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIndicators, chartData, isDark, library]);
+  }, [activeIndicators, chartData, isDark, library, volumeData]);
 
   useEffect(() => {
     const series = candleSeriesRef.current;

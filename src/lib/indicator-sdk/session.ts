@@ -33,6 +33,7 @@ export function sessionRange(candles: readonly CandleData[], config: ImportedInd
   const now = parts(last.time*1000, fmt);
   const o = minutes(config.open), c = minutes(config.close);
   const day = now.day - (now.minute < o ? 1 : 0);
+  if (!config.days.includes(new Date(day*86400000).getUTCDay())) return null;
   const start = civilTime(day,o,fmt), end = civilTime(day+(c<=o?1:0),c,fmt);
   if (start === null || end === null) return null;
   let out: SessionRange | null = null;

@@ -47,14 +47,15 @@ export function toUnixMs(ts: number): number {
 }
 
 /** Convert candles for indicator lib */
-export function toIndicatorCandles(candles: CandlestickData<Time>[]): CandleData[] {
+export function toIndicatorCandles(candles: CandlestickData<Time>[], volumes: readonly {time:Time;value:number}[] = []): CandleData[] {
+  const byTime=new Map(volumes.map(v=>[v.time,v.value]));
   return candles.map((c) => ({
     time: c.time as number,
     open: c.open,
     high: c.high,
     low: c.low,
     close: c.close,
-    volume: 0,
+    volume: byTime.get(c.time) ?? 0,
   }));
 }
 
