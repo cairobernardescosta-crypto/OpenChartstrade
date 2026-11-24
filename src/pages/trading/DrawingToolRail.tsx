@@ -15,17 +15,20 @@ import {
   MoveVertical,
   PenTool,
   Ruler,
+  Rows3,
   Spline,
   Square,
   TrendingUp,
   Triangle,
   Type,
+  Star,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useDragOffset } from "../../hooks/useDragOffset.ts";
 import { cn } from "../../lib/utils.ts";
 import { safeStorage } from "../../lib/safe-storage.ts";
 import type { DrawingTool } from "./constants.ts";
+import { DRAWING_TOOL_FAVORITES_EVENT, getDrawingToolFavorites, setDrawingToolFavorite } from "./drawingToolFavorites.ts";
 
 interface ToolMeta {
   tool: DrawingTool;
@@ -120,12 +123,18 @@ function RailGroup({
   open,
   onToggle,
   onSelect,
+  favorites,
+  onFavorite,
+  orientation,
 }: {
   group: ToolGroup;
   activeTool: DrawingTool;
   open: boolean;
   onToggle: () => void;
   onSelect: (t: DrawingTool) => void;
+  favorites: Set<DrawingTool>;
+  onFavorite: (t: DrawingTool) => void;
+  orientation: "vertical" | "horizontal";
 }) {
   const activeMeta = group.tools.find((t) => t.tool === activeTool);
   const Icon = activeMeta?.icon ?? group.icon;
@@ -133,20 +142,17 @@ function RailGroup({
     <div className="relative">
       <RailButton icon={Icon} title={group.label} active={Boolean(activeMeta)} onClick={onToggle} />
       {open && (
-        <div className="absolute left-full top-0 ml-1 z-30 min-w-[180px] rounded-md bg-card border border-border shadow-xl py-1">
+        <div className={cn("absolute z-30 min-w-[190px] rounded-md bg-card border border-border shadow-xl py-1", orientation === "vertical" ? "left-full top-0 ml-1" : "left-0 top-full mt-1")}>
           {group.tools.map((t) => (
-            <button
-              key={t.tool}
-              type="button"
-              onClick={() => onSelect(t.tool)}
-              className={cn(
-                "w-full flex items-center gap-2.5 px-3 py-1.5 text-sm hover:bg-secondary text-left",
-                activeTool === t.tool && "bg-secondary text-primary",
-              )}
-            >
-              <t.icon className="h-3.5 w-3.5 shrink-0" />
-              {t.label}
-            </button>
+            <div key={t.tool} className={cn("flex items-center hover:bg-secondary", activeTool === t.tool && "bg-secondary text-primary")}>
+              <button type="button" onClick={() => onSelect(t.tool)} className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-1.5 text-left text-sm">
+                <t.icon className="h-3.5 w-3.5 shrink-0" />
+                {t.label}
+              </button>
+              <button type="button" aria-label={(favorites.has(t.tool) ? "Remover dos favoritos " : "Adicionar aos favoritos ") + t.label} className="mr-2 rounded p-1 text-muted-foreground hover:text-primary" onClick={() => onFavorite(t.tool)}>
+                <Star className="h-3.5 w-3.5" fill={favorites.has(t.tool) ? "currentColor" : "none"} />
+              </button>
+            </div>
           ))}
         </div>
       )}
@@ -163,6 +169,8 @@ export function DrawingToolRail({
 }) {
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [hidden, setHidden] = useState(() => safeStorage.getItem("opencharts.drawing-rail.hidden") === "true");
+  const [orientation, setOrientation] = useState<"vertical" | "horizontal">(() => safeStorage.getItem("opencharts.drawing-rail.orientation") === "horizontal" ? "horizontal" : "vertical");
+  const [favorites, setFavorites] = useState(() => new Set(getDrawingToolFavorites()));
   const ref = useRef<HTMLDivElement>(null);
   const drag = useDragOffset();
 
@@ -174,6 +182,11 @@ export function DrawingToolRail({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [openGroup]);
+  useEffect(() => {
+    const refresh = () => setFavorites(new Set(getDrawingToolFavorites()));
+    window.addEventListener(DRAWING_TOOL_FAVORITES_EVENT, refresh);
+    return () => window.removeEventListener(DRAWING_TOOL_FAVORITES_EVENT, refresh);
+  }, []);
 
   const select = (t: DrawingTool) => {
     onDrawingTool(drawingTool === t ? "none" : t);
@@ -185,6 +198,13 @@ export function DrawingToolRail({
     setHidden(true);
     safeStorage.setItem("opencharts.drawing-rail.hidden", "true");
   };
+  const toggleFavorite = (tool: DrawingTool) => setDrawingToolFavorite(tool, !favorites.has(tool));
+  const toggleOrientation = () => setOrientation((current) => {
+    const next = current === "vertical" ? "horizontal" : "vertical";
+    safeStorage.setItem("opencharts.drawing-rail.orientation", next);
+    return next;
+  });
+  const favoriteMeta = GROUPS.flatMap((group) => group.tools).filter((tool) => favorites.has(tool.tool));
 
   // Collapsed: a small restorable button where the rail was last positioned.
   if (hidden) {
@@ -205,12 +225,12 @@ export function DrawingToolRail({
     <div
       ref={ref}
       style={drag.style}
-      className="absolute left-1 top-1 z-20 flex flex-col items-center gap-0.5 rounded-md bg-card/90 border border-border p-0.5 backdrop-blur-sm"
+      className={cn("absolute left-1 top-1 z-20 flex items-center gap-0.5 rounded-md bg-card/90 border border-border p-0.5 backdrop-blur-sm", orientation === "vertical" ? "flex-col" : "flex-row")}
     >
       <div
         onPointerDown={drag.onPointerDown}
         title="Drag to move"
-        className="flex w-full cursor-move justify-center py-0.5 text-muted-foreground/50 hover:text-muted-foreground"
+        className={cn("flex cursor-move justify-center text-muted-foreground/50 hover:text-muted-foreground", orientation === "vertical" ? "w-full py-0.5" : "h-full px-0.5")}
       >
         <GripVertical className="h-3.5 w-3.5" />
       </div>
@@ -231,9 +251,14 @@ export function DrawingToolRail({
           open={openGroup === g.id}
           onToggle={() => setOpenGroup((o) => (o === g.id ? null : g.id))}
           onSelect={select}
+          favorites={favorites}
+          onFavorite={toggleFavorite}
+          orientation={orientation}
         />
       ))}
-      <div className="my-0.5 w-full border-t border-border/50" />
+      {favoriteMeta.map((tool) => <RailButton key={"favorite:"+tool.tool} icon={tool.icon} title={"Favorito: "+tool.label} active={drawingTool===tool.tool} onClick={() => select(tool.tool)} />)}
+      <div className={cn("border-border/50", orientation === "vertical" ? "my-0.5 w-full border-t" : "mx-0.5 h-full border-l")} />
+      <RailButton icon={Rows3} title={orientation === "vertical" ? "Mudar barra para horizontal" : "Mudar barra para vertical"} onClick={toggleOrientation} />
       <RailButton icon={EyeOff} title="Hide toolbar" onClick={hide} />
     </div>
   );

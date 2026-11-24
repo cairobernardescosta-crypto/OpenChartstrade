@@ -16,6 +16,7 @@ import {
   Info,
   Layers,
   Layers3,
+  Link2,
   type LucideIcon,
   Magnet,
   Maximize2,
@@ -56,6 +57,7 @@ import { isHyperliquidMode } from "../../hyperliquid/ui/mode.ts";
 import { useHlSession } from "../../hyperliquid/session.ts";
 import { ReplayHUD } from "./ReplayHUD.tsx";
 import { getPipDigits } from "./utils.ts";
+import { DRAWING_TOOL_FAVORITES_EVENT, getDrawingToolFavorites, setDrawingToolFavorite } from "./drawingToolFavorites.ts";
 
 export interface ChartToolbarProps {
   previewCandles?:readonly import("../../lib/indicators").CandleData[];
@@ -75,6 +77,8 @@ export interface ChartToolbarProps {
   onTimeframeChange: (tf: Timeframe) => void;
   chartLayout: "single" | "split";
   onChartLayoutChange: (layout: "single" | "split") => void;
+  chartsLinked?: boolean;
+  onChartsLinkedChange?: (linked: boolean) => void;
   activeIndicators: IndicatorType[];
   indicatorScope?: "primary" | "secondary";
   onToggleIndicator: (type: IndicatorType) => void;
@@ -124,6 +128,8 @@ export function ChartToolbar({
   onTimeframeChange,
   chartLayout,
   onChartLayoutChange,
+  chartsLinked = false,
+  onChartsLinkedChange,
   activeIndicators,
   indicatorScope = "primary",
   onToggleIndicator,
@@ -414,6 +420,23 @@ export function ChartToolbar({
           <Columns2 className="h-3 w-3" />
           2 gráficos
         </button>
+        {chartLayout === "split" && onChartsLinkedChange && (
+          <button
+            type="button"
+            onClick={() => onChartsLinkedChange(!chartsLinked)}
+            aria-pressed={chartsLinked}
+            title={chartsLinked ? "Desvincular indicadores e desenhos" : "Vincular indicadores e desenhos nos dois gráficos"}
+            className={cn(
+              "flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all",
+              chartsLinked
+                ? "bg-primary/20 text-primary"
+                : "hover:bg-secondary/80 text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Link2 className="h-3 w-3" />
+            Vincular
+          </button>
+        )}
       </div>
 
       {/* Session replay controls — disabled until the feature is QA'd */}
@@ -716,6 +739,7 @@ function DrawingToolsDropdown({
   onToggleStayInDrawingMode?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [favoriteTools, setFavoriteTools] = useState(() => new Set(getDrawingToolFavorites()));
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -728,6 +752,11 @@ function DrawingToolsDropdown({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
+  useEffect(() => {
+    const refresh = () => setFavoriteTools(new Set(getDrawingToolFavorites()));
+    window.addEventListener(DRAWING_TOOL_FAVORITES_EVENT, refresh);
+    return () => window.removeEventListener(DRAWING_TOOL_FAVORITES_EVENT, refresh);
+  }, []);
 
   const isActive = drawingTool !== "none";
 
@@ -759,18 +788,21 @@ function DrawingToolsDropdown({
       {open && (
         <div className="absolute top-full left-0 z-50 mt-1 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[190px]">
           {DRAWING_TOOLS.map(({ tool, icon: Icon, label, shortcut }) => (
-            <button
-              key={tool}
-              onClick={() => handleSelect(tool)}
-              className={cn(
-                "w-full flex items-center gap-2.5 px-3 py-1.5 text-sm hover:bg-secondary text-left",
-                drawingTool === tool && "bg-secondary text-primary",
-              )}
-            >
-              <Icon className="h-3.5 w-3.5 shrink-0" />
-              <span className="flex-1">{label}</span>
-              <span className="text-[10px] text-muted-foreground/60">{shortcut}</span>
-            </button>
+            <div key={tool} className={cn("flex items-center hover:bg-secondary", drawingTool === tool && "bg-secondary text-primary")}>
+              <button onClick={() => handleSelect(tool)} className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-1.5 text-left text-sm">
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                <span className="flex-1">{label}</span>
+                <span className="text-[10px] text-muted-foreground/60">{shortcut}</span>
+              </button>
+              <button
+                type="button"
+                aria-label={(favoriteTools.has(tool) ? "Remover dos favoritos " : "Adicionar aos favoritos ") + label}
+                className="mr-2 rounded p-1 text-muted-foreground hover:text-primary"
+                onClick={() => setDrawingToolFavorite(tool, !favoriteTools.has(tool))}
+              >
+                <Star className="h-3.5 w-3.5" fill={favoriteTools.has(tool) ? "currentColor" : "none"} />
+              </button>
+            </div>
           ))}
 
           <div className="my-1 border-t border-border" />

@@ -42,6 +42,7 @@ interface LayoutState {
   bottomTab?: "positions" | "orders" | "history" | "journal" | "calendar" | "news";
   rightPanel?: "order" | "dom" | "watchlist" | "news" | "tv-analysis";
   showRightPanel?: boolean;
+  chartsLinked?: boolean;
 }
 function readSecondaryState(): SecondaryChartState {
   const memory = getWorkspaceMemorySettings();
@@ -145,6 +146,8 @@ export function TradingPage() {
   const [showIndicatorMenu, setShowIndicatorMenu] = useState(false);
   const [chartLayout, setChartLayout] = useState<"single" | "split">(initialLayout.chartLayout === "split" ? "split" : "single");
   const [activeChart, setActiveChart] = useState<"primary" | "secondary">(initialLayout.activeChart === "secondary" ? "secondary" : "primary");
+  const [chartsLinked, setChartsLinked] = useState(initialLayout.chartsLinked === true);
+  const [linkedSource, setLinkedSource] = useState<"primary" | "secondary">("primary");
   const secondaryPrefs=useChartPreferences("secondary");
   const focusedPrefs=activeChart==="primary"?chartPrefs:secondaryPrefs;
   // The secondary chart owns its market and indicator state. It starts on 1h
@@ -159,6 +162,8 @@ export function TradingPage() {
     updateDrawing: updateSecondaryDrawing,
     removeDrawing: removeSecondaryDrawing,
     clearDrawings: clearSecondaryDrawings,
+    undo: undoSecondaryDrawing,
+    redo: redoSecondaryDrawing,
   } = useChartDrawings(secondarySymbol, secondaryTimeframe, "secondary");
   const [secondaryPlugins, setSecondaryPlugins] = useState<string[]>(initialSecondary.plugins ?? secondaryPrefs.activePlugins);
   const hadStoredSecondaryRef = useRef(Boolean(initialSecondary.symbol));
@@ -214,8 +219,8 @@ export function TradingPage() {
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
 
   useEffect(() => {
-    if (getWorkspaceMemorySettings().layout) safeStorage.setJSON(LAYOUT_STATE_KEY, { chartLayout, activeChart, bottomTab, rightPanel, showRightPanel } satisfies LayoutState);
-  }, [chartLayout, activeChart, bottomTab, rightPanel, showRightPanel]);
+    if (getWorkspaceMemorySettings().layout) safeStorage.setJSON(LAYOUT_STATE_KEY, { chartLayout, activeChart, bottomTab, rightPanel, showRightPanel, chartsLinked } satisfies LayoutState);
+  }, [chartLayout, activeChart, bottomTab, rightPanel, showRightPanel, chartsLinked]);
 
   // ── Vertical resize: chart vs bottom panel ──
   const [bottomPanelHeight, setBottomPanelHeight] = useState(() => {
@@ -315,6 +320,19 @@ export function TradingPage() {
   }, []);
   const clearSecondaryIndicators = useCallback(() => setSecondaryIndicators([]), []);
 
+  const linkedIndicators = linkedSource === "primary" ? activeIndicators : secondaryIndicators;
+  const linkedDrawings = linkedSource === "primary" ? drawings : secondaryDrawings;
+  const linkedDrawingTool = linkedSource === "primary" ? drawingTool : secondaryDrawingTool;
+  const linkedToggleIndicator = linkedSource === "primary" ? toggleIndicator : toggleSecondaryIndicator;
+  const linkedSetDrawingTool = linkedSource === "primary" ? setDrawingTool : setSecondaryDrawingTool;
+  const linkedAddDrawing = linkedSource === "primary" ? addDrawing : addSecondaryDrawing;
+  const linkedUpdateDrawing = linkedSource === "primary" ? updateDrawing : updateSecondaryDrawing;
+  const linkedRemoveDrawing = linkedSource === "primary" ? removeDrawing : removeSecondaryDrawing;
+  const linkedClearDrawings = linkedSource === "primary" ? clearDrawings : clearSecondaryDrawings;
+  const linkedClearIndicators = linkedSource === "primary" ? handleClearIndicators : clearSecondaryIndicators;
+  const linkedUndoDrawing = linkedSource === "primary" ? undoDrawing : undoSecondaryDrawing;
+  const linkedRedoDrawing = linkedSource === "primary" ? redoDrawing : redoSecondaryDrawing;
+
   const handleSynchronizedSymbolChange = useCallback((symbol: string) => {
     setSelectedSymbol(symbol);
     setSecondarySymbol(symbol);
@@ -357,15 +375,20 @@ export function TradingPage() {
           if (layout === "single") setActiveChart("primary");
           setChartLayout(layout);
         }}
+        chartsLinked={chartsLinked}
+        onChartsLinkedChange={(linked) => {
+          if (linked) setLinkedSource(activeChart);
+          setChartsLinked(linked);
+        }}
         indicatorScope={activeChart}
-        activeIndicators={activeChart === "primary" ? activeIndicators : secondaryIndicators}
-        onToggleIndicator={activeChart === "primary" ? toggleIndicator : toggleSecondaryIndicator}
+        activeIndicators={chartsLinked ? linkedIndicators : activeChart === "primary" ? activeIndicators : secondaryIndicators}
+        onToggleIndicator={chartsLinked ? linkedToggleIndicator : activeChart === "primary" ? toggleIndicator : toggleSecondaryIndicator}
         showIndicatorMenu={showIndicatorMenu}
         onToggleIndicatorMenu={() => setShowIndicatorMenu((v) => !v)}
-        drawingTool={activeChart === "primary" ? drawingTool : secondaryDrawingTool}
-        onDrawingTool={activeChart === "primary" ? setDrawingTool : setSecondaryDrawingTool}
-        drawings={activeChart === "primary" ? drawings : secondaryDrawings}
-        onClearDrawings={activeChart === "primary" ? clearDrawings : clearSecondaryDrawings}
+        drawingTool={chartsLinked ? linkedDrawingTool : activeChart === "primary" ? drawingTool : secondaryDrawingTool}
+        onDrawingTool={chartsLinked ? linkedSetDrawingTool : activeChart === "primary" ? setDrawingTool : setSecondaryDrawingTool}
+        drawings={chartsLinked ? linkedDrawings : activeChart === "primary" ? drawings : secondaryDrawings}
+        onClearDrawings={chartsLinked ? linkedClearDrawings : activeChart === "primary" ? clearDrawings : clearSecondaryDrawings}
         rightPanel={rightPanel}
         onRightPanel={handleRightPanelChange}
         showRightPanel={showRightPanel}
@@ -400,16 +423,16 @@ export function TradingPage() {
               selectedSymbol={selectedSymbol}
               timeframe={replayCandles ? "1m" : timeframe}
               isDark={isDark}
-              activeIndicators={activeIndicators}
-              drawingTool={drawingTool}
-              drawings={drawings}
-              onAddDrawing={addDrawing}
-              onUpdateDrawing={updateDrawing}
-              onRemoveDrawing={removeDrawing}
-              onDrawingComplete={() => setDrawingTool("none")}
-              onDrawingToolSelect={setDrawingTool}
-              onUndoDrawing={undoDrawing}
-              onRedoDrawing={redoDrawing}
+              activeIndicators={chartsLinked ? linkedIndicators : activeIndicators}
+              drawingTool={chartsLinked ? linkedDrawingTool : drawingTool}
+              drawings={chartsLinked ? linkedDrawings : drawings}
+              onAddDrawing={chartsLinked ? linkedAddDrawing : addDrawing}
+              onUpdateDrawing={chartsLinked ? linkedUpdateDrawing : updateDrawing}
+              onRemoveDrawing={chartsLinked ? linkedRemoveDrawing : removeDrawing}
+              onDrawingComplete={() => (chartsLinked ? linkedSetDrawingTool : setDrawingTool)("none")}
+              onDrawingToolSelect={chartsLinked ? linkedSetDrawingTool : setDrawingTool}
+              onUndoDrawing={chartsLinked ? linkedUndoDrawing : undoDrawing}
+              onRedoDrawing={chartsLinked ? linkedRedoDrawing : redoDrawing}
               magnetMode={chartPrefs.magnetMode}
               stayInDrawingMode={chartPrefs.stayInDrawingMode}
               positions={chartPositions}
@@ -426,8 +449,8 @@ export function TradingPage() {
               accountEquity={account?.equity ?? account?.balance ?? 0}
               accountId={activeAccountId}
               onQuickOrder={handleQuickOrder}
-              onClearDrawings={clearDrawings}
-              onClearIndicators={handleClearIndicators}
+              onClearDrawings={chartsLinked ? linkedClearDrawings : clearDrawings}
+              onClearIndicators={chartsLinked ? linkedClearIndicators : handleClearIndicators}
             />
             </div>
             {chartLayout === "split" && (
@@ -440,14 +463,16 @@ export function TradingPage() {
                     timeframe={secondaryTimeframe}
                     isDark={isDark}
                     indicatorScope="secondary"
-                    activeIndicators={secondaryIndicators}
-                    drawingTool={secondaryDrawingTool}
-                    drawings={secondaryDrawings}
-                    onAddDrawing={addSecondaryDrawing}
-                    onUpdateDrawing={updateSecondaryDrawing}
-                    onRemoveDrawing={removeSecondaryDrawing}
-                    onDrawingComplete={() => setSecondaryDrawingTool("none")}
-                    onDrawingToolSelect={setSecondaryDrawingTool}
+                    activeIndicators={chartsLinked ? linkedIndicators : secondaryIndicators}
+                    drawingTool={chartsLinked ? linkedDrawingTool : secondaryDrawingTool}
+                    drawings={chartsLinked ? linkedDrawings : secondaryDrawings}
+                    onAddDrawing={chartsLinked ? linkedAddDrawing : addSecondaryDrawing}
+                    onUpdateDrawing={chartsLinked ? linkedUpdateDrawing : updateSecondaryDrawing}
+                    onRemoveDrawing={chartsLinked ? linkedRemoveDrawing : removeSecondaryDrawing}
+                    onDrawingComplete={() => (chartsLinked ? linkedSetDrawingTool : setSecondaryDrawingTool)("none")}
+                    onDrawingToolSelect={chartsLinked ? linkedSetDrawingTool : setSecondaryDrawingTool}
+                    onUndoDrawing={chartsLinked ? linkedUndoDrawing : undoSecondaryDrawing}
+                    onRedoDrawing={chartsLinked ? linkedRedoDrawing : redoSecondaryDrawing}
                     magnetMode={secondaryPrefs.magnetMode}
                     stayInDrawingMode={secondaryPrefs.stayInDrawingMode}
                     positions={[]}
@@ -458,8 +483,8 @@ export function TradingPage() {
                     symbolInfo={secondarySymbolInfo}
                     activePlugins={secondaryPlugins}
                     onTogglePlugin={toggleSecondaryPlugin}
-                    onClearDrawings={clearSecondaryDrawings}
-                    onClearIndicators={clearSecondaryIndicators}
+                    onClearDrawings={chartsLinked ? linkedClearDrawings : clearSecondaryDrawings}
+                    onClearIndicators={chartsLinked ? linkedClearIndicators : clearSecondaryIndicators}
                   />
                 </div>
               </div>
