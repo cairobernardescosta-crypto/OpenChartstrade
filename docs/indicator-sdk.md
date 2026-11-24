@@ -96,3 +96,6 @@ O editor fixa o destino ao abrir (biblioteca global, gráfico principal ou secun
 
 ## L05 estados do histórico
 Estados por indicador, ativo e gráfico: carregando, atualizando, disponível, vazio, erro e limite. Consultas independentes e sessões publicam estados separados dos diagnósticos de cálculo; resultados obsoletos são descartados. A prévia mostra carregamento e permite nova tentativa. Validação local pendente.
+
+## L06 mensagens de erro
+Aviso reutilizável em português com categoria, orientação e detalhes técnicos recolhíveis. Aplicado à biblioteca, prévia, objetos gráficos e administração, sem modificar contratos de dados ou regras de execução. Detalhes limitados e URLs/credenciais comuns ocultadas na apresentação. Testes adicionados; validação local pendente.
