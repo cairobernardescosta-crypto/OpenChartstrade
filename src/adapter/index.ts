@@ -18,6 +18,7 @@ export type {
   ClosedPosition,
   ConnectionState,
   MarketDataSource,
+  MarketSessionSchedule,
   MarketEvent,
   OpenChartsAdapter,
   Order,

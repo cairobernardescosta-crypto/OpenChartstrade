@@ -58,7 +58,18 @@ export type MarketEvent =
       timestamp: number;
     };
 
+export interface MarketSessionSchedule {
+  timezone:string;
+  open:string;
+  close:string;
+  days:number[];
+  source:string;
+  /** A recurring session convention, not a guarantee of exchange availability. */
+  continuous:boolean;
+}
 export interface MarketDataSource {
+  /** Optional provider-declared recurring trading session, evaluated at the supplied epoch ms. */
+  getMarketSchedule?(symbol:string,atMs:number):Promise<MarketSessionSchedule|null>;
   /** Instruments the terminal may chart and trade. */
   getSymbols(): Promise<Symbol[]>;
 

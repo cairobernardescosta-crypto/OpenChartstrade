@@ -22,6 +22,8 @@ import {IndicatorWorkerClient} from "../../lib/indicator-sdk/worker-client";
 import {RuntimeGuard} from "../../lib/indicator-sdk/runtime";
 import { useIndicatorLibrary } from "../../lib/indicator-sdk/storage";
 import {GraphicPrimitive} from "../../lib/indicator-sdk/graphic-renderer";
+import {getAdapter,onAdapterChange} from "../../adapter/registry";
+import {resolveMarketSchedule,type ResolvedMarketSchedule} from "../../lib/indicator-sdk/market-schedule";
 import {SessionHistoryCache,type SessionHistory} from "../../lib/indicator-sdk/session-history";
 import type {ImportedIndicator} from "../../lib/indicator-sdk/schema";
 import { SessionCandlePrimitive } from "../../lib/indicator-sdk/renderer";
@@ -345,8 +347,15 @@ export function useIndicators(
   useEffect(()=>{const chart=chartRef.current;const seriesMap=indicatorSeriesRef.current;const cache=cacheRef.current;const guard=guardRef.current;const signatures=signaturesRef.current;const owners=ownersRef.current;return()=>{if(chart)for(const [key,series] of seriesMap){try{(owners.get(key)??chart).removeSeries(series);}catch{/* disposed */}}owners.clear();seriesMap.clear();paneManagerRef.current?.dispose();paneManagerRef.current=null;cache.clear();guard.reset();signatures.clear();workerRef.current?.stop();workerRef.current=null;};},[chartEpoch,chartRef]);
 
   const replaySlice=isReplaying?chartData:undefined;
+  const [adapterRevision,setAdapterRevision]=useState(0);
+  useEffect(()=>onAdapterChange(()=>setAdapterRevision(v=>v+1)),[]);
+  const automaticDefinitions=JSON.stringify(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind==="session-candle"&&x.sessionSchedule==="automatic"));
+  const scheduleKey=JSON.stringify([symbol,isReplaying,replayCutoff,automaticDefinitions,adapterRevision]);
+  const [schedules,setSchedules]=useState<{key:string;entries:Record<string,ResolvedMarketSchedule>}>({key:"",entries:{}});
+  useEffect(()=>{const entries=JSON.parse(automaticDefinitions) as ImportedIndicator[];if(!entries.length||!symbol)return;let disposed=false;let busy=false;const refresh=async()=>{if(busy)return;busy=true;try{const cutoff=isReplaying?replayCutoff*1000:Date.now();const values:Record<string,ResolvedMarketSchedule>={};for(const entry of entries){if(disposed)return;values[entry.id]=await resolveMarketSchedule(getAdapter().marketData,symbol,entry,cutoff);}if(!disposed)setSchedules({key:scheduleKey,entries:values});}catch{if(!disposed)setSchedules({key:scheduleKey,entries:Object.fromEntries(entries.map(entry=>[entry.id,{config:{...entry,sessionSchedule:"manual" as const},message:"Provider unavailable — manual fallback",fallback:true}]))});}finally{busy=false;}};void refresh();const timer=isReplaying?undefined:setInterval(()=>void refresh(),60000);return()=>{disposed=true;if(timer!==undefined)clearInterval(timer);};},[automaticDefinitions,symbol,isReplaying,replayCutoff,scheduleKey]);
+  useEffect(()=>{if(schedules.key!==scheduleKey)return;for(const [id,value] of Object.entries(schedules.entries))if(value.fallback)reportIndicator(scope,id,0,0,value.message);},[schedules,scheduleKey,scope]);
   const [sessionHistory,setSessionHistory]=useState<{key:string;entries:Record<string,SessionHistory>}>({key:"",entries:{}});
-  const sessionDefinitions=JSON.stringify(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind==="session-candle"&&x.historySource==="independent"));
+  const sessionDefinitions=JSON.stringify(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind==="session-candle"&&x.historySource==="independent").flatMap(x=>x.sessionSchedule!=="automatic"?[x]:schedules.key===scheduleKey&&schedules.entries[x.id]?[schedules.entries[x.id]!.config]:[]));
   const sessionKey=JSON.stringify([symbol,isReplaying,replayCutoff,sessionDefinitions,admin.maxBars]);
   useEffect(()=>{const entries=JSON.parse(sessionDefinitions) as ImportedIndicator[];if(!entries.length||!symbol)return;let disposed=false;let busy=false;
     const refresh=async()=>{if(busy)return;busy=true;try{const cutoff=isReplaying?replayCutoff:Math.floor(Date.now()/1000);if(!cutoff)return;
@@ -359,9 +368,9 @@ export function useIndicators(
     const series = candleSeriesRef.current;
     if (!series) return;
     const allowed=activeIndicators.filter(x=>x.startsWith("custom:")).slice(0,admin.maxActive);
-    const primitives = library.filter(x => allowed.includes(`custom:${x.id}`)).flatMap(x => {const entry=resolveIndicator(x,overrides);if(!entry.visible)return [];const items:import("lightweight-charts").ISeriesPrimitive<Time>[]=[];if(entry.kind==="session-candle")items.push(new SessionCandlePrimitive(entry,sourceSeconds,admin.maxBars,replaySlice,entry.historySource==="independent"?(sessionHistory.key===sessionKey?sessionHistory.entries[entry.id]?.rows??[]:[]):undefined,sessionHistory.entries[entry.id]?.step??60));if(entry.graphics.length)items.push(new GraphicPrimitive(entry.graphics,replaySlice));return items;});
+    const primitives = library.filter(x => allowed.includes(`custom:${x.id}`)).flatMap(x => {const raw=resolveIndicator(x,overrides);if(!raw.visible)return [];const resolved=schedules.key===scheduleKey?schedules.entries[raw.id]:undefined;const entry=raw.sessionSchedule==="automatic"?(resolved?.config??{...raw,sessionSchedule:"manual" as const}):raw;const items:import("lightweight-charts").ISeriesPrimitive<Time>[]=[];if(raw.sessionSchedule==="automatic"&&!resolved)return [];if(entry.kind==="session-candle")items.push(new SessionCandlePrimitive(entry,sourceSeconds,admin.maxBars,replaySlice,entry.historySource==="independent"?(sessionHistory.key===sessionKey?sessionHistory.entries[entry.id]?.rows??[]:[]):undefined,sessionHistory.entries[entry.id]?.step??60));if(entry.graphics.length)items.push(new GraphicPrimitive(entry.graphics,replaySlice));return items;});
     const attached:typeof primitives=[];
     for (const primitive of primitives) {try{series.attachPrimitive(primitive);attached.push(primitive);}catch(e){console.warn("Indicator attachment failed",e);}}
     return () => { for (const primitive of attached) { try { series.detachPrimitive(primitive); } catch { /* disposed chart */ } } };
-  }, [activeIndicators, library, overrides, admin, sourceSeconds, chartEpoch, isReplaying, replaySlice,sessionHistory,sessionKey]);
+  }, [activeIndicators, library, overrides, admin, sourceSeconds, chartEpoch, isReplaying, replaySlice,sessionHistory,sessionKey,schedules,scheduleKey]);
 }
