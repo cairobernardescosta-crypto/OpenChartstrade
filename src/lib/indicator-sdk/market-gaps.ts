@@ -1,0 +1,11 @@
+import type {CandleData,IndicatorPoint} from "../indicators";
+export type MarketGapPolicy="continuous"|"utc-weekdays";
+export function isScheduledClosed(time:number,step:number,policy:MarketGapPolicy){if(policy==="continuous"||step>86400)return false;const day=new Date(time*1000).getUTCDay();const endDay=new Date((time+step-1)*1000).getUTCDay();return (day===0||day===6)&&(endDay===0||endDay===6);}
+export function missingOpenBars(from:number,to:number,step:number,policy:MarketGapPolicy){if(!Number.isFinite(from)||!Number.isFinite(to)||!Number.isInteger(step)||step<=0||to<from||(to-from)%step!==0)return 1;if(policy==="continuous")return (to-from)/step;let missing=0;for(let t=from;t<to;t+=step){if(t-from>370*86400)return missing+1;if(!isScheduledClosed(t,step,policy))missing++;}return missing;}
+export function validMarketBar(c:CandleData){return Number.isInteger(c.time)&&[c.open,c.high,c.low,c.close].every(Number.isFinite)&&c.high>=Math.max(c.open,c.close)&&c.low<=Math.min(c.open,c.close)&&(c.volume===undefined||Number.isFinite(c.volume)&&c.volume>=0);}
+export function inspectGaps(bars:readonly CandleData[],step:number,policy:MarketGapPolicy){let missing=0,scheduled=0;for(let i=1;i<bars.length;i++){const from=bars[i-1]!.time+step,to=bars[i]!.time;if(to<=from)continue;const count=missingOpenBars(from,to,step,policy);missing+=count;scheduled+=Math.max(0,Math.floor((to-from)/step)-count);}return {missing,scheduled};}
+// Explicit whitespace prevents the chart from drawing a line across missing source values.
+export function plotWithGaps(points:readonly IndicatorPoint[],chart:readonly CandleData[],sourceStep:number,maxAge:number,policy:MarketGapPolicy="continuous"){
+ const result:({time:number;value:number}|{time:number})[]=[];let i=0;let current:IndicatorPoint|undefined;let previous:number|undefined;
+ for(const bar of chart){while(i<points.length&&points[i]!.time<=bar.time)current=points[i++];if(previous!==undefined&&missingOpenBars(previous+sourceStep,bar.time,sourceStep,policy)>0&&bar.time>previous+sourceStep)result.push({time:previous+sourceStep});result.push(current&&bar.time-current.time<maxAge?{time:bar.time,value:current.value}:{time:bar.time});previous=bar.time;}return result;
+}

@@ -1,4 +1,5 @@
 import type {CandleData,IndicatorPoint} from "../indicators";
+import {validMarketBar,type MarketGapPolicy} from "./market-gaps";
 import {aggregateCompleted} from "./aggregate";
 export const HISTORY_LIMIT=5000;
 export function historyPlan(minutes:number):{timeframe:string;seconds:number;aggregate:number}|null{
@@ -13,13 +14,13 @@ export function historyPlan(minutes:number):{timeframe:string;seconds:number;agg
  default:return null;
  }
 }
-export function completedHistory(rows:readonly CandleData[],minutes:number,cutoff:number):CandleData[]{
+export function completedHistory(rows:readonly CandleData[],minutes:number,cutoff:number,policy:MarketGapPolicy="continuous"):CandleData[]{
  const plan=historyPlan(minutes);if(!plan)return [];
  const unique=new Map<number,CandleData>();
- for(const c of rows)if(Number.isInteger(c.time)&&c.time+plan.seconds<=cutoff&&[c.open,c.high,c.low,c.close].every(Number.isFinite)&&c.high>=Math.max(c.open,c.close)&&c.low<=Math.min(c.open,c.close))unique.set(c.time,{...c});
+ for(const c of rows)if(validMarketBar(c)&&c.time+plan.seconds<=cutoff)unique.set(c.time,{...c});
  const bars=[...unique.values()].sort((a,b)=>a.time-b.time).slice(-HISTORY_LIMIT);
  if(!plan.aggregate)return bars.map(c=>({...c,time:c.time+plan.seconds}));
- return aggregateCompleted(bars,plan.aggregate,plan.seconds,true).map(c=>({...c,time:c.time+plan.seconds}));
+ return aggregateCompleted(bars,plan.aggregate,plan.seconds,true,policy).map(c=>({...c,time:c.time+plan.seconds}));
 }
 export function alignHistoryPoints(points:readonly IndicatorPoint[],chart:readonly CandleData[],maxAge=Infinity):IndicatorPoint[]{
  const result:IndicatorPoint[]=[];let i=0;let current:IndicatorPoint|undefined;
@@ -31,12 +32,12 @@ type CacheRow={expires:number;promise:Promise<CandleData[]>};
 export class IndependentHistoryCache{
  private cache=new Map<string,CacheRow>();
  constructor(private load:Loader,private now=Date.now){}
- get(symbol:string,minutes:number,cutoff:number){
+ get(symbol:string,minutes:number,cutoff:number,policy:MarketGapPolicy="continuous"){
   const plan=historyPlan(minutes);if(!plan)return Promise.resolve([]);
   const boundary=Math.floor(cutoff/plan.seconds)*plan.seconds;
-  const key=JSON.stringify([symbol,minutes,boundary]);const old=this.cache.get(key);
+  const key=JSON.stringify([symbol,minutes,boundary,policy]);const old=this.cache.get(key);
   if(old&&old.expires>this.now())return old.promise;
-  const promise=this.load(symbol,plan.timeframe,HISTORY_LIMIT,boundary*1000).then(rows=>completedHistory(rows,minutes,boundary));
+  const promise=this.load(symbol,plan.timeframe,HISTORY_LIMIT,boundary*1000).then(rows=>completedHistory(rows,minutes,boundary,policy));
   const row={expires:this.now()+30000,promise};this.cache.set(key,row);
   promise.catch(()=>{if(this.cache.get(key)===row)this.cache.delete(key);});
   while(this.cache.size>16){const first=this.cache.keys().next().value;if(first===undefined)break;this.cache.delete(first);}

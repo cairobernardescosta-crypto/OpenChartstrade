@@ -1,3 +1,4 @@
+import type {MarketGapPolicy} from "./market-gaps";
 import type {CandleData,IndicatorPoint} from "../indicators";
 import {runBoundedExpression} from "./runtime";
 import {sma,ema} from "../indicators";
@@ -12,7 +13,7 @@ export class CalculationCache{
  constructor(private maxEntries=12,private maxPoints=100000){}
  get pointBudget(){return this.maxPoints;}
  calculate(config:ImportedIndicator,bars:CandleData[]):{points:IndicatorPoint[];cached:boolean;incremental:boolean}{
-  const signature=JSON.stringify([config.kind,config.period,config.expression,parameterValues(config),config.aggregation,config.historySource]);
+  const signature=JSON.stringify([config.kind,config.period,config.expression,parameterValues(config),config.aggregation,config.historySource,config.gapPolicy]);
   const old=this.entries.get(config.id);
   const prefix=old?.signature===signature?sharedPrefix(old.input,bars):0;
   if(old&&old.signature===signature&&prefix===old.input.length&&prefix===bars.length){this.entries.delete(config.id);this.entries.set(config.id,old);return {points:old.output,cached:true,incremental:false};}
@@ -38,8 +39,8 @@ export class CalculationCache{
 export class AggregationCache{
  private input:CandleData[]=[];
  private step=0;
- private values=new Map<number,CandleData[]>();
+ private values=new Map<string,CandleData[]>();
  private lastInput:CandleData[]|undefined;
  prepare(input:CandleData[],step:number){if(this.lastInput===input&&this.step===step)return;this.lastInput=input;if(this.step!==step||input.length!==this.input.length||sharedPrefix(this.input,input)!==input.length){this.input=input.map(x=>({...x}));this.step=step;this.values.clear();}}
- get(minutes:number){let value=this.values.get(minutes);if(!value){value=aggregateCompleted(this.input,minutes,this.step);this.values.set(minutes,value);}return value;}
+ get(minutes:number,policy:MarketGapPolicy="continuous"){const key=minutes+":"+policy;let value=this.values.get(key);if(!value){value=aggregateCompleted(this.input,minutes,this.step,false,policy);this.values.set(key,value);}return value;}
 }

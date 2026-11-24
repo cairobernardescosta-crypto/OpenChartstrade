@@ -21,6 +21,7 @@ export const indicatorSchema = z.object({
   paneHeight:z.number().int().min(80).max(320).default(120),
   category:z.string().max(60).default("Custom"),
   visible:z.boolean().default(true),
+  gapPolicy:z.enum(["continuous","utc-weekdays"]).default("continuous"),
   historySource:z.enum(["chart","independent"]).default("chart"),
   aggregation:z.number().refine(v=>aggregationMinutes.some(m=>m===v),"Unsupported aggregation").default(0),
   snapshotBaseVersion:z.string().regex(/^\d+\.\d+\.\d+$/).optional(),

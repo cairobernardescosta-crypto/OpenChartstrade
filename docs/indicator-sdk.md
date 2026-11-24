@@ -66,3 +66,6 @@ Version 2 optionally includes saved chart templates and adapter-persisted drawin
 
 ## M17 visual preferences
 Primary preferences retain their existing keys. Secondary preferences are stored in the same user-scoped preference store under chart.secondary.* with independent defaults. Settings dialogs and template snapshots apply to their own chart; lower panes follow their owning chart colors. Drawing interaction preferences are scoped as well. Existing primary settings remain unchanged. Local visual, persistence and template verification pending.
+
+## M19 market gaps
+Continuous 24/7 is the default, including Hyperliquid HIP-3; underlying oracle market closure is not an excuse to ignore missing exchange bars. An explicit UTC weekday-only aggregation policy supports known weekend closures, not exchange holidays or intraday schedules. Incomplete open intervals are rejected, invalid OHLCV is rejected for aggregation, and custom plots emit whitespace instead of indefinite stale values. Local validation pending.

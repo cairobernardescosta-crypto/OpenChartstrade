@@ -23,7 +23,8 @@ import {RuntimeGuard} from "../../lib/indicator-sdk/runtime";
 import { useIndicatorLibrary } from "../../lib/indicator-sdk/storage";
 import {GraphicPrimitive} from "../../lib/indicator-sdk/graphic-renderer";
 import { SessionCandlePrimitive } from "../../lib/indicator-sdk/renderer";
-import {IndependentHistoryCache,alignHistoryPoints,historyPlan,historyMaxAge} from "../../lib/indicator-sdk/independent-history";
+import {inspectGaps,plotWithGaps} from "../../lib/indicator-sdk/market-gaps";
+import {IndependentHistoryCache,historyPlan,historyMaxAge} from "../../lib/indicator-sdk/independent-history";
 import type {CandleData} from "../../lib/indicators";
 import {api} from "../../services/api.ts";
 import {IndicatorPanes,nativePaneKey,type PaneColors} from "./indicator-panes";
@@ -61,16 +62,16 @@ export function useIndicators(
   const admin = useIndicatorAdmin();
   const overrides = useOverrides(scope);
   const colors = visualColors??(isDark ? CHART_COLORS.dark : CHART_COLORS.light);
-  const [history,setHistory]=useState<{key:string;rows:Record<number,CandleData[]>;errors?:Record<number,string>}>({key:"",rows:{}});
+  const [history,setHistory]=useState<{key:string;rows:Record<string,CandleData[]>;errors?:Record<string,string>}>({key:"",rows:{}});
   const allowedCustom=activeIndicators.filter(x=>x.startsWith("custom:")).slice(0,admin.maxActive);
-  const requestedPeriods=[...new Set(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind!=="graphics"&&x.kind!=="session-candle"&&x.historySource==="independent"&&historyPlan(x.aggregation)).map(x=>x.aggregation))].sort((a,b)=>a-b);
+  const requestedPeriods=[...new Set(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind!=="graphics"&&x.kind!=="session-candle"&&x.historySource==="independent"&&historyPlan(x.aggregation)).map(x=>x.aggregation+":"+x.gapPolicy))].sort();
   const periods=requestedPeriods.slice(0,6);
   const periodKey=periods.join(",");
   const lastTime=chartData[chartData.length-1]?.time;
   const replayCutoff=isReplaying&&typeof lastTime==="number"?lastTime:0;
   const historyKey=JSON.stringify([symbol,periodKey,isReplaying,replayCutoff]);
   useEffect(()=>{if(!symbol||!periodKey)return;let stopped=false;let running=false;
-    const refresh=async()=>{if(running)return;running=true;try{const cutoff=isReplaying?replayCutoff:Math.floor(Date.now()/1000);if(!cutoff)return;const results=await Promise.allSettled(periodKey.split(",").map(async raw=>{const n=Number(raw);return [n,await independentHistory.get(symbol,n,cutoff)] as const;}));if(!stopped){const rows:Record<number,CandleData[]>={};const errors:Record<number,string>={};results.forEach((result,index)=>{if(result.status==="fulfilled")rows[result.value[0]]=result.value[1];else errors[Number(periodKey.split(",")[index])]="Market history unavailable";});setHistory({key:historyKey,rows,errors});}}finally{running=false;}};
+    const refresh=async()=>{if(running)return;running=true;try{const cutoff=isReplaying?replayCutoff:Math.floor(Date.now()/1000);if(!cutoff)return;const results=await Promise.allSettled(periodKey.split(",").map(async raw=>{const [period,policy]=raw.split(":");const n=Number(period);return [raw,await independentHistory.get(symbol,n,cutoff,policy==="utc-weekdays"?"utc-weekdays":"continuous")] as const;}));if(!stopped){const rows:Record<string,CandleData[]>={};const errors:Record<string,string>={};results.forEach((result,index)=>{if(result.status==="fulfilled")rows[result.value[0]]=result.value[1];else errors[periodKey.split(",")[index]!]="Market history unavailable";});setHistory({key:historyKey,rows,errors});}}finally{running=false;}};
     void refresh();const timer=isReplaying?undefined:setInterval(()=>void refresh(),30000);return()=>{stopped=true;if(timer!==undefined)clearInterval(timer);};
   },[symbol,periodKey,isReplaying,replayCutoff,historyKey]);
 
@@ -137,21 +138,25 @@ export function useIndicators(
           const started=performance.now();
           try {
           const external=entry.historySource==="independent"&&entry.aggregation!==0;
-          const bounded=external?(history.key===historyKey?history.rows[entry.aggregation]??[]:[]).slice(-admin.maxBars):aggregation.get(entry.aggregation);
-          if(external&&!periods.includes(entry.aggregation)){reportIndicator(scope,entry.id,0,0,"Independent period limit reached (6 per chart)");continue;}
-          if(external&&(!bounded.length||history.errors?.[entry.aggregation])){reportIndicator(scope,entry.id,0,0,history.key!==historyKey?"Loading market history":history.errors?.[entry.aggregation]??"No completed market history");continue;}
+          const historyId=entry.aggregation+":"+entry.gapPolicy;
+          const bounded=external?(history.key===historyKey?history.rows[historyId]??[]:[]).slice(-admin.maxBars):aggregation.get(entry.aggregation,entry.gapPolicy);
+          if(external&&!periods.includes(historyId)){reportIndicator(scope,entry.id,0,0,"Independent period limit reached (6 per chart)");continue;}
+          if(external&&(!bounded.length||history.errors?.[historyId])){reportIndicator(scope,entry.id,0,0,history.key!==historyKey?"Loading market history":history.errors?.[historyId]??"No completed market history");continue;}
           const worker=typeof Worker!=="undefined"?(workerRef.current??=new IndicatorWorkerClient()):null;
           const reply=worker?await worker.calculate(entry,bounded):null;
           if(disposed)return;
           const result=reply?.result??cache.calculate(entry,bounded);
-          const data=external?alignHistoryPoints(result.points,indCandles,historyMaxAge(entry.aggregation)):entry.aggregation!==0?alignHistoryPoints(result.points.map(p=>({...p,time:p.time+sourceSeconds})),indCandles):result.points;
+          const effectiveStep=entry.aggregation?historyMaxAge(entry.aggregation):sourceSeconds;
+          const dated=external||entry.aggregation===0?result.points:result.points.map(p=>({...p,time:p.time+sourceSeconds}));
+          const data=plotWithGaps(dated,indCandles,sourceSeconds,effectiveStep,entry.gapPolicy);
+          const gaps=inspectGaps(bounded,effectiveStep,entry.gapPolicy);
           if(!reply&&performance.now()-started>100)throw new Error("Indicator execution budget exceeded");
           const key=type+":"+entry.plot;
           const owner=entry.scale==="pane"?target(key,{id:type,label:entry.name,height:entry.paneHeight}):chart;
           if(owners.get(key)&&owners.get(key)!==owner)remove(key);
           const scaleId=entry.scale==="independent"?"indicator-"+entry.id:"right";
           if(!external&&entry.aggregation===0&&result.cached&&!settingsChanged&&indicatorSeriesRef.current.has(key)){used.add(key);guard.success(type);continue;}
-          const points=data.map(p=>({time:p.time as Time,value:p.value}));
+          const points=data.map(p=>"value" in p?{time:p.time as Time,value:p.value}:{time:p.time as Time});
           if(entry.plot==="histogram")histogram(key,{color:entry.color,priceScaleId:scaleId},owner).setData(points);
           else if(entry.plot==="area"){
             used.add(key);let area=indicatorSeriesRef.current.get(key) as ISeriesApi<"Area">|undefined;
@@ -160,7 +165,7 @@ export function useIndicators(
             area.setData(points);
           }else line(key,{color:entry.color,lineWidth:entry.lineWidth as 1|2|3|4|5,priceScaleId:scaleId},owner).setData(points);
           guard.success(type);
-          if(admin.diagnostics)reportIndicator(scope,entry.id,reply?.ms??performance.now()-started,bounded.length,"",result.incremental?"incremental":result.cached?"cache":"full",reply?.stats.points??cache.stats().points);
+          if(admin.diagnostics)reportIndicator(scope,entry.id,reply?.ms??performance.now()-started,bounded.length,gaps.missing?`${gaps.missing} missing history intervals`:"",result.incremental?"incremental":result.cached?"cache":"full",reply?.stats.points??cache.stats().points);
           }catch(e){if(disposed)return;used.delete(type+":"+entry.plot);const failures=guard.fail(type);reportIndicator(scope,entry.id,performance.now()-started,0,(e instanceof Error?e.message:String(e))+(guard.blocked(type)?" — paused after "+failures+" failures":""));}
         }
         continue;

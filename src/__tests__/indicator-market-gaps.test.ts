@@ -1,0 +1,4 @@
+import {describe,it,expect} from "vitest";import {aggregateCompleted} from "../lib/indicator-sdk/aggregate";import {missingOpenBars,plotWithGaps} from "../lib/indicator-sdk/market-gaps";
+const day=86400;const monday=Date.UTC(2026,10,16)/1000;
+const bar=(time:number)=>({time,open:1,high:2,low:1,close:2});
+describe("market gaps",()=>{it("allows explicitly scheduled weekend closure but not continuous market gaps",()=>{const bars=Array.from({length:5},(_,i)=>bar(monday+i*day));bars.push(bar(monday+7*day));expect(aggregateCompleted(bars,10080,day,false,"utc-weekdays")).toHaveLength(1);expect(aggregateCompleted(bars,10080,day)).toHaveLength(0);});it("rejects missing weekday",()=>expect(missingOpenBars(monday,monday+day,day,"utc-weekdays")).toBe(1));it("uses whitespace rather than stale values",()=>expect(plotWithGaps([{time:0,value:2}],[bar(0),bar(60),bar(120)],60,60)).toEqual([{time:0,value:2},{time:60},{time:120}]));});
