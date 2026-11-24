@@ -2,12 +2,12 @@ import type { CandleData, IndicatorPoint } from "../indicators";
 
 // A bounded arithmetic interpreter, not a JavaScript runtime. No identifiers
 // other than OHLCV, no property access, calls, loops, imports or external IO.
-const functions = {abs: Math.abs, sqrt: Math.sqrt, log:Math.log, exp:Math.exp, floor:Math.floor, ceil:Math.ceil, round:Math.round} as const;
+const functions = {abs: Math.abs, sqrt: Math.sqrt, log:Math.log, exp:Math.exp, floor:Math.floor, ceil:Math.ceil, round:Math.round, sin:Math.sin, cos:Math.cos, tan:Math.tan, sign:Math.sign, log10:Math.log10} as const;
 type FunctionName=keyof typeof functions;
 type Node = { kind:"number"; value:number } | {kind:"field"; field:"open"|"high"|"low"|"close"|"volume"} | {kind:"parameter";name:string} | {kind:"function";name:FunctionName;arg:Node} | {kind:"binary"; op:string; left:Node; right:Node};
 export function compileExpression(source:string,parameters:Readonly<Record<string,number>>={}): (c:CandleData)=>number {
   if(source.length>512) throw new Error("Expression too long");
-  const tokens=source.match(/\d+(?:\.\d+)?|[a-zA-Z][a-zA-Z0-9_]*|[+*/()\-]|\s+|./g)?.filter(t=>!/^\s+$/.test(t))??[];
+  const tokens=source.match(/\d+(?:\.\d+)?|[a-zA-Z][a-zA-Z0-9_]*|[+*/()%\-]|\s+|./g)?.filter(t=>!/^\s+$/.test(t))??[];
   if(tokens.length>128)throw new Error("Too many tokens");
   let i=0;
   function atom(depth:number):Node {
@@ -23,7 +23,7 @@ export function compileExpression(source:string,parameters:Readonly<Record<strin
   }
   function expr(min:number,depth:number):Node {
     let left=atom(depth);
-    while(i<tokens.length){const op=tokens[i]!;const p=op==="+"||op==="-"?1:op==="*"||op==="/"?2:0;if(p===0||p<min)break;i++;left={kind:"binary",op,left,right:expr(p+1,depth+1)};}
+    while(i<tokens.length){const op=tokens[i]!;const p=op==="+"||op==="-"?1:op==="*"||op==="/"||op==="%"?2:0;if(p===0||p<min)break;i++;left={kind:"binary",op,left,right:expr(p+1,depth+1)};}
     return left;
   }
   const root=expr(0,0);if(i!==tokens.length)throw new Error("Unexpected token");
@@ -33,7 +33,7 @@ export function compileExpression(source:string,parameters:Readonly<Record<strin
     if(n.kind==="parameter")return parameters[n.name]??NaN;
     if(n.kind==="function")return functions[n.name](run(n.arg,c));
     const a=run(n.left,c),b=run(n.right,c);
-    return n.op==="+"?a+b:n.op==="-"?a-b:n.op==="*"?a*b:b===0?NaN:a/b;
+    return n.op==="+"?a+b:n.op==="-"?a-b:n.op==="*"?a*b:b===0?NaN:n.op==="%"?a%b:a/b;
   }
   return c=>run(root,c);
 }

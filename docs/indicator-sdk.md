@@ -54,3 +54,6 @@ The worker queue is limited to four requests and each request to 20,000 candles.
 
 ## Session extensions
 Weekly and monthly civil-period options and a 24/7 UTC convention are available. The latter is not an official exchange calendar or underlying commodity schedule. Independent session history currently requests up to 5,000 closed one-minute bars, so long periods may be incomplete and intentionally hidden. Local validation and further long-history integration remain pending.
+
+## Additional medium corrections
+The expression whitelist now includes trigonometric functions, sign, log10 and remainder. Drawing objects support line styles and an editor for creating all supported commands and validating their properties. Native indicators skip identical-input recomputation within the chart effect. Arbitrary executable TypeScript and independent heap limits remain intentionally unsupported.

@@ -17,7 +17,7 @@ import { toIndicatorCandles } from "./utils.ts";
 import { useOverrides, resolveIndicator, type ChartScope } from "../../lib/indicator-sdk/instances";
 import {useIndicatorAdmin} from "../../lib/indicator-sdk/admin";
 import {reportIndicator} from "../../lib/indicator-sdk/diagnostics";
-import {AggregationCache,CalculationCache} from "../../lib/indicator-sdk/calculation-cache";
+import {AggregationCache,CalculationCache,sharedPrefix} from "../../lib/indicator-sdk/calculation-cache";
 import {IndicatorWorkerClient} from "../../lib/indicator-sdk/worker-client";
 import {RuntimeGuard} from "../../lib/indicator-sdk/runtime";
 import { useIndicatorLibrary } from "../../lib/indicator-sdk/storage";
@@ -75,6 +75,8 @@ export function useIndicators(
     const chart = chartRef.current;
     const source=candleSeriesRef.current;
     const used=new Set<string>();
+    let nativePrevious:CandleData[]=[];
+    let nativeKeys=new Set<string>();
     const guard=guardRef.current;
     const cache=cacheRef.current;
     const aggregation=aggregationRef.current;
@@ -104,6 +106,7 @@ export function useIndicators(
       const series=chart.addHistogramSeries(options);indicatorSeriesRef.current.set(key,series);return series;
     }
 
+    const nativeUnchanged=nativePrevious.length===indCandles.length&&sharedPrefix(nativePrevious,indCandles)===indCandles.length;
     let importedCount=0;
     for (const type of activeIndicators) {
       if (type.startsWith("custom:")) {
@@ -147,6 +150,7 @@ export function useIndicators(
       const config = INDICATOR_REGISTRY.find((r) => r.type === type);
       if (!config) continue;
 
+      if(nativeUnchanged&&nativeKeys.has(type)){for(const key of indicatorSeriesRef.current.keys())if(key===type||key.startsWith(type+"-"))used.add(key);continue;}
       switch (type) {
         case "SMA": {
           const data = sma(indCandles, config.defaultParams.period!);
@@ -297,6 +301,7 @@ export function useIndicators(
         }
       }
     }
+    nativePrevious=indCandles.map(x=>({...x}));nativeKeys=new Set(activeIndicators.filter(x=>!x.startsWith("custom:")));
     for(const [key,series] of indicatorSeriesRef.current){if(!used.has(key)){try{chart.removeSeries(series);}catch{/* disposed */}indicatorSeriesRef.current.delete(key);}}
     }finally{busy=false;if(rerun&&!disposed){rerun=false;void sync();}}
     };

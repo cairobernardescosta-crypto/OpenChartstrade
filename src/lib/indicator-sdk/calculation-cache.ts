@@ -39,6 +39,7 @@ export class AggregationCache{
  private input:CandleData[]=[];
  private step=0;
  private values=new Map<number,CandleData[]>();
- prepare(input:CandleData[],step:number){if(this.step!==step||input.length!==this.input.length||sharedPrefix(this.input,input)!==input.length){this.input=input.map(x=>({...x}));this.step=step;this.values.clear();}}
+ private lastInput:CandleData[]|undefined;
+ prepare(input:CandleData[],step:number){if(this.lastInput===input&&this.step===step)return;this.lastInput=input;if(this.step!==step||input.length!==this.input.length||sharedPrefix(this.input,input)!==input.length){this.input=input.map(x=>({...x}));this.step=step;this.values.clear();}}
  get(minutes:number){let value=this.values.get(minutes);if(!value){value=aggregateCompleted(this.input,minutes,this.step);this.values.set(minutes,value);}return value;}
 }

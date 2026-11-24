@@ -16,7 +16,7 @@ export class GraphicPrimitive extends PluginBase {
    const point=(p:{bars:number;price:number},anchor:Graphic["anchor"],multiplier=1)=>{const a=x(p.bars),b=y(p.price,p.bars,anchor,multiplier);return a===null||b===null?null:{x:a,y:b};};
    target.useMediaCoordinateSpace(({context:c,mediaSize:m})=>{
     const line=(a:number,b:number,d:number,e:number)=>{c.beginPath();c.moveTo(a,b);c.lineTo(d,e);c.stroke();};
-    for(const g of this.graphics){if(!g.visible||g.layer!==layer)continue;c.save();c.strokeStyle=g.color;c.fillStyle=g.color;c.globalAlpha=g.opacity;c.lineWidth=g.width;c.font="11px sans-serif";
+    for(const g of this.graphics){if(!g.visible||g.layer!==layer)continue;c.save();c.strokeStyle=g.color;c.fillStyle=g.color;c.globalAlpha=g.opacity;c.lineWidth=g.width;c.setLineDash(g.dash==="dashed"?[6,4]:g.dash==="dotted"?[2,3]:[]);c.font="11px sans-serif";
       if(g.type==="candle"){const a=x(g.bars),o=y(g.open,g.bars,g.anchor,g.priceMultiplier),h=y(g.high,g.bars,g.anchor,g.priceMultiplier),l=y(g.low,g.bars,g.anchor,g.priceMultiplier),close=y(g.close,g.bars,g.anchor,g.priceMultiplier);if(a!==null&&o!==null&&h!==null&&l!==null&&close!==null){line(a,h,a,l);c.fillRect(a-g.bodyWidth/2,Math.min(o,close),g.bodyWidth,Math.max(1,Math.abs(o-close)));}}
       else if(g.type==="horizontal"){const p=y(g.price,0,g.anchor,g.priceMultiplier);if(p!==null)line(0,p,m.width,p);}
       else if(g.type==="vertical"){const p=x(g.bars);if(p!==null)line(p,0,p,m.height);}
