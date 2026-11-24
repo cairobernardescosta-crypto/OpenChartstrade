@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { IChartApi, ISeriesApi, CandlestickData, Time } from "lightweight-charts";
 import { LineStyle } from "lightweight-charts";
 import {
@@ -22,7 +22,12 @@ import {RuntimeGuard} from "../../lib/indicator-sdk/runtime";
 import { useIndicatorLibrary } from "../../lib/indicator-sdk/storage";
 import {GraphicPrimitive} from "../../lib/indicator-sdk/graphic-renderer";
 import { SessionCandlePrimitive } from "../../lib/indicator-sdk/renderer";
+import {IndependentHistoryCache,alignHistoryPoints,historyPlan} from "../../lib/indicator-sdk/independent-history";
+import type {CandleData} from "../../lib/indicators";
+import {api} from "../../services/api.ts";
 import { CHART_COLORS } from "./constants.ts";
+
+const independentHistory=new IndependentHistoryCache((symbol,timeframe,limit,toMs)=>api.getCandles(symbol,timeframe,limit,{toMs}));
 
 export function useIndicators(
   chartRef: React.RefObject<IChartApi | null>,
@@ -36,6 +41,7 @@ export function useIndicators(
   chartEpoch=0,
   liveVolumeRef?:React.RefObject<ISeriesApi<"Histogram"> | null>,
   isReplaying=false,
+  symbol="",
 ): void {
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<"Line"> | ISeriesApi<"Histogram"> | ISeriesApi<"Area">>>(
     new Map(),
@@ -48,6 +54,16 @@ export function useIndicators(
   const admin = useIndicatorAdmin();
   const overrides = useOverrides(scope);
   const colors = isDark ? CHART_COLORS.dark : CHART_COLORS.light;
+  const [history,setHistory]=useState<{key:string;rows:Record<number,CandleData[]>}>({key:"",rows:{}});
+  const periods=[...new Set(library.filter(x=>activeIndicators.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.historySource==="independent"&&historyPlan(x.aggregation)).map(x=>x.aggregation))].sort((a,b)=>a-b).slice(0,6);
+  const periodKey=periods.join(",");
+  const lastTime=chartData[chartData.length-1]?.time;
+  const replayCutoff=isReplaying&&typeof lastTime==="number"?lastTime:0;
+  const historyKey=JSON.stringify([symbol,periodKey,isReplaying,replayCutoff]);
+  useEffect(()=>{if(!symbol||!periodKey)return;let stopped=false;let running=false;
+    const refresh=async()=>{if(running)return;running=true;try{const cutoff=isReplaying?replayCutoff:Math.floor(Date.now()/1000);if(!cutoff)return;const results=await Promise.allSettled(periodKey.split(",").map(async raw=>{const n=Number(raw);return [n,await independentHistory.get(symbol,n,cutoff)] as const;}));if(!stopped){const rows:Record<number,CandleData[]>={};for(const result of results)if(result.status==="fulfilled")rows[result.value[0]]=result.value[1];setHistory({key:historyKey,rows});}}finally{running=false;}};
+    void refresh();const timer=isReplaying?undefined:setInterval(()=>void refresh(),30000);return()=>{stopped=true;if(timer!==undefined)clearInterval(timer);};
+  },[symbol,periodKey,isReplaying,replayCutoff,historyKey]);
 
   useEffect(() => {
     if (!chartRef.current || !candleSeriesRef.current) return;
@@ -94,13 +110,14 @@ export function useIndicators(
           if(guard.blocked(type))continue;
           const started=performance.now();
           try {
-          const bounded=aggregation.get(entry.aggregation);
+          const external=entry.historySource==="independent"&&entry.aggregation!==0;
+          const bounded=external?(history.key===historyKey?history.rows[entry.aggregation]??[]:[]):aggregation.get(entry.aggregation);
           const result=cache.calculate(entry,bounded);
-          const data=result.points;
+          const data=external?alignHistoryPoints(result.points,indCandles):result.points;
           if(performance.now()-started>100)throw new Error("Indicator execution budget exceeded");
           const key=type+":"+entry.plot;
           const scaleId=entry.scale==="independent"?"indicator-"+entry.id:"right";
-          if(result.cached&&!settingsChanged&&indicatorSeriesRef.current.has(key)){used.add(key);guard.success(type);continue;}
+          if(!external&&result.cached&&!settingsChanged&&indicatorSeriesRef.current.has(key)){used.add(key);guard.success(type);continue;}
           const points=data.map(p=>({time:p.time as Time,value:p.value}));
           if(entry.plot==="histogram")histogram(key,{color:entry.color,priceScaleId:scaleId}).setData(points);
           else if(entry.plot==="area"){
@@ -277,7 +294,7 @@ export function useIndicators(
     return()=>{source.unsubscribeDataChanged(schedule);volume?.unsubscribeDataChanged(schedule);if(timer!==undefined)clearTimeout(timer);};
     // chartRef/candleSeriesRef are stable refs; colors derived from isDark dep.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIndicators, chartData, isDark, library, volumeData, overrides, admin, sourceSeconds, chartEpoch, liveVolumeRef, scope, isReplaying]);
+  }, [activeIndicators, chartData, isDark, library, volumeData, overrides, admin, sourceSeconds, chartEpoch, liveVolumeRef, scope, isReplaying, history, historyKey]);
 
   useEffect(()=>{const chart=chartRef.current;const seriesMap=indicatorSeriesRef.current;const cache=cacheRef.current;const guard=guardRef.current;const signatures=signaturesRef.current;return()=>{if(chart)for(const series of seriesMap.values()){try{chart.removeSeries(series);}catch{/* disposed */}}seriesMap.clear();cache.clear();guard.reset();signatures.clear();};},[chartEpoch,chartRef]);
 

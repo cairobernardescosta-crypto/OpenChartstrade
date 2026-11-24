@@ -39,3 +39,6 @@ Per-chart bounded calculation cache (12 entries, 100,000 combined input/output p
 
 ## Template and replay phase
 Templates capture effective imported settings, validate before mutation and resolve version conflicts by keeping the installed definition while applying a chart-local snapshot. Secondary template selection and autosave state are separate from primary. Secondary templates do not change shared appearance preferences. Replay math and session primitives consume the supplied historical slice, rather than live series data. Native graphics still use the chart series for anchors. Full replay integration and UI verification remain pending.
+
+## Independent history
+Optional independent history uses the existing read-only market API, explicit exclusive end times (no extra chart subscriptions), a 16-entry request cache, at most six distinct periods per chart, and 30-second live refresh. Native intervals are requested directly; others derive from hourly or daily candles. Results are aligned to chart bars only after their source close. Replay uses the historical cursor, never wall-clock future candles. Missing history renders no output. Local verification pending.

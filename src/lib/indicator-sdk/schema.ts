@@ -20,6 +20,7 @@ export const indicatorSchema = z.object({
   scale:z.enum(["price","independent"]).default("price"),
   category:z.string().max(60).default("Custom"),
   visible:z.boolean().default(true),
+  historySource:z.enum(["chart","independent"]).default("chart"),
   aggregation:z.number().refine(v=>aggregationMinutes.some(m=>m===v),"Unsupported aggregation").default(0),
   favorite: z.boolean().default(false),
   author: z.string().max(80).default(""),

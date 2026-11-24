@@ -1,0 +1,4 @@
+import {describe,it,expect,vi} from "vitest";
+import {completedHistory,alignHistoryPoints,IndependentHistoryCache} from "../lib/indicator-sdk/independent-history";
+const bar=(time:number)=>({time,open:1,high:3,low:1,close:2});
+describe("independent history",()=>{it("excludes unfinished candles",()=>expect(completedHistory([bar(0),bar(3600)],60,5400)).toEqual([{...bar(0),time:3600}]));it("includes a confirmed closed aggregate",()=>expect(completedHistory([bar(0),bar(3600)],120,7200)[0]?.time).toBe(7200));it("does not expose future values",()=>expect(alignHistoryPoints([{time:3600,value:2}],[bar(0),bar(3600)])).toEqual([{time:3600,value:2}]));it("deduplicates requests and separates symbols",async()=>{const load=vi.fn(async()=>[bar(0)]);const cache=new IndependentHistoryCache(load);await Promise.all([cache.get("A",60,3600),cache.get("A",60,3600)]);expect(load).toHaveBeenCalledTimes(1);await cache.get("B",60,3600);expect(load).toHaveBeenCalledTimes(2);});});
