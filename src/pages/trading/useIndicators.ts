@@ -26,6 +26,7 @@ import { SessionCandlePrimitive } from "../../lib/indicator-sdk/renderer";
 import {IndependentHistoryCache,alignHistoryPoints,historyPlan,historyMaxAge} from "../../lib/indicator-sdk/independent-history";
 import type {CandleData} from "../../lib/indicators";
 import {api} from "../../services/api.ts";
+import {IndicatorPanes,nativePaneKey} from "./indicator-panes";
 import { CHART_COLORS } from "./constants.ts";
 
 const independentHistory=new IndependentHistoryCache((symbol,timeframe,limit,toMs)=>api.getCandles(symbol,timeframe,limit,{toMs}));
@@ -43,10 +44,13 @@ export function useIndicators(
   liveVolumeRef?:React.RefObject<ISeriesApi<"Histogram"> | null>,
   isReplaying=false,
   symbol="",
+  paneRoot?:React.RefObject<HTMLDivElement|null>,
 ): void {
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<"Line"> | ISeriesApi<"Histogram"> | ISeriesApi<"Area">>>(
     new Map(),
   );
+  const paneManagerRef=useRef<IndicatorPanes|null>(null);
+  const ownersRef=useRef(new Map<string,IChartApi>());
   const cacheRef=useRef(new CalculationCache());
   const workerRef=useRef<IndicatorWorkerClient|null>(null);
   const aggregationRef=useRef(new AggregationCache());
@@ -74,6 +78,11 @@ export function useIndicators(
 
     const chart = chartRef.current;
     const source=candleSeriesRef.current;
+    const owners=ownersRef.current;
+    const panes=paneRoot?.current?(paneManagerRef.current??=new IndicatorPanes(chart,paneRoot.current,colors)):null;
+    const usedPanes=new Set<string>();
+    const remove=(key:string)=>{const series=indicatorSeriesRef.current.get(key);if(series)try{(owners.get(key)??chart).removeSeries(series);}catch{/* disposed */}owners.delete(key);indicatorSeriesRef.current.delete(key);};
+    const target=(key:string,customPane?:{id:string;label:string;height:number})=>{const id=customPane?.id??nativePaneKey(key);if(!id||!panes)return chart;usedPanes.add(id);return panes.get(id,customPane?.label??id,customPane?.height);};
     const used=new Set<string>();
     let nativePrevious:CandleData[]=[];
     let nativeKeys=new Set<string>();
@@ -84,26 +93,31 @@ export function useIndicators(
     const sync=async()=>{
     if(disposed)return;if(busy){rerun=true;return;}busy=true;
     try{
-    used.clear();
+    used.clear();usedPanes.clear();
     const live=source.data().flatMap(c=>typeof c.time==="number"&&"open" in c?[c as CandlestickData<Time>]:[]);
     const vols=liveVolumeRef?.current?.data().flatMap(v=>"value" in v?[{time:v.time,value:v.value}]:[])??volumeData;
     const indCandles = toIndicatorCandles(isReplaying?chartData:live.length?live:chartData, isReplaying?volumeData:vols);
+    panes?.setTimeline(indCandles.map(c=>c.time as Time));
     aggregation.prepare(indCandles.slice(-admin.maxBars),sourceSeconds);
     const activeCustom=new Set(activeIndicators.filter(x=>x.startsWith("custom:")).map(x=>x.slice(7)));
     cache.prune(activeCustom);
     for(const id of signaturesRef.current.keys())if(!activeCustom.has(id)){signaturesRef.current.delete(id);guard.success("custom:"+id);}
 
-    function line(key:string,options:Parameters<IChartApi["addLineSeries"]>[0]){
+    function line(key:string,options:Parameters<IChartApi["addLineSeries"]>[0],owner=target(key)){
+      if(owners.get(key)&&owners.get(key)!==owner)remove(key);
+      if(owner!==chart)options={...options,priceScaleId:"right"};
       used.add(key);
       const existing=indicatorSeriesRef.current.get(key) as ISeriesApi<"Line">|undefined;
       if(existing){existing.applyOptions(options??{});return existing;}
-      const series=chart.addLineSeries(options);indicatorSeriesRef.current.set(key,series);return series;
+      const series=owner.addLineSeries(options);owners.set(key,owner);indicatorSeriesRef.current.set(key,series);return series;
     }
-    function histogram(key:string,options:Parameters<IChartApi["addHistogramSeries"]>[0]){
+    function histogram(key:string,options:Parameters<IChartApi["addHistogramSeries"]>[0],owner=target(key)){
+      if(owners.get(key)&&owners.get(key)!==owner)remove(key);
+      if(owner!==chart)options={...options,priceScaleId:"right"};
       used.add(key);
       const existing=indicatorSeriesRef.current.get(key) as ISeriesApi<"Histogram">|undefined;
       if(existing){existing.applyOptions(options??{});return existing;}
-      const series=chart.addHistogramSeries(options);indicatorSeriesRef.current.set(key,series);return series;
+      const series=owner.addHistogramSeries(options);owners.set(key,owner);indicatorSeriesRef.current.set(key,series);return series;
     }
 
     const nativeUnchanged=nativePrevious.length===indCandles.length&&sharedPrefix(nativePrevious,indCandles)===indCandles.length;
@@ -131,16 +145,18 @@ export function useIndicators(
           const data=external?alignHistoryPoints(result.points,indCandles,historyMaxAge(entry.aggregation)):entry.aggregation!==0?alignHistoryPoints(result.points.map(p=>({...p,time:p.time+sourceSeconds})),indCandles):result.points;
           if(!reply&&performance.now()-started>100)throw new Error("Indicator execution budget exceeded");
           const key=type+":"+entry.plot;
+          const owner=entry.scale==="pane"?target(key,{id:type,label:entry.name,height:entry.paneHeight}):chart;
+          if(owners.get(key)&&owners.get(key)!==owner)remove(key);
           const scaleId=entry.scale==="independent"?"indicator-"+entry.id:"right";
           if(!external&&entry.aggregation===0&&result.cached&&!settingsChanged&&indicatorSeriesRef.current.has(key)){used.add(key);guard.success(type);continue;}
           const points=data.map(p=>({time:p.time as Time,value:p.value}));
-          if(entry.plot==="histogram")histogram(key,{color:entry.color,priceScaleId:scaleId}).setData(points);
+          if(entry.plot==="histogram")histogram(key,{color:entry.color,priceScaleId:scaleId},owner).setData(points);
           else if(entry.plot==="area"){
             used.add(key);let area=indicatorSeriesRef.current.get(key) as ISeriesApi<"Area">|undefined;
             const options={lineColor:entry.color,topColor:entry.color+"55",bottomColor:entry.color+"00",priceScaleId:scaleId};
-            if(!area){area=chart.addAreaSeries(options);indicatorSeriesRef.current.set(key,area);}else area.applyOptions(options);
+            if(!area){area=owner.addAreaSeries(options);owners.set(key,owner);indicatorSeriesRef.current.set(key,area);}else area.applyOptions(options);
             area.setData(points);
-          }else line(key,{color:entry.color,lineWidth:entry.lineWidth as 1|2|3|4|5,priceScaleId:scaleId}).setData(points);
+          }else line(key,{color:entry.color,lineWidth:entry.lineWidth as 1|2|3|4|5,priceScaleId:scaleId},owner).setData(points);
           guard.success(type);
           if(admin.diagnostics)reportIndicator(scope,entry.id,reply?.ms??performance.now()-started,bounded.length,"",result.incremental?"incremental":result.cached?"cache":"full",reply?.stats.points??cache.stats().points);
           }catch(e){if(disposed)return;used.delete(type+":"+entry.plot);const failures=guard.fail(type);reportIndicator(scope,entry.id,performance.now()-started,0,(e instanceof Error?e.message:String(e))+(guard.blocked(type)?" — paused after "+failures+" failures":""));}
@@ -150,7 +166,7 @@ export function useIndicators(
       const config = INDICATOR_REGISTRY.find((r) => r.type === type);
       if (!config) continue;
 
-      if(nativeUnchanged&&nativeKeys.has(type)){for(const key of indicatorSeriesRef.current.keys())if(key===type||key.startsWith(type+"-"))used.add(key);continue;}
+      if(nativeUnchanged&&nativeKeys.has(type)){if(nativePaneKey(type))usedPanes.add(type);for(const key of indicatorSeriesRef.current.keys())if(key===type||key.startsWith(type+"-"))used.add(key);continue;}
       switch (type) {
         case "SMA": {
           const data = sma(indCandles, config.defaultParams.period!);
@@ -302,7 +318,8 @@ export function useIndicators(
       }
     }
     nativePrevious=indCandles.map(x=>({...x}));nativeKeys=new Set(activeIndicators.filter(x=>!x.startsWith("custom:")));
-    for(const [key,series] of indicatorSeriesRef.current){if(!used.has(key)){try{chart.removeSeries(series);}catch{/* disposed */}indicatorSeriesRef.current.delete(key);}}
+    for(const key of indicatorSeriesRef.current.keys())if(!used.has(key))remove(key);
+    panes?.retain(usedPanes);
     }finally{busy=false;if(rerun&&!disposed){rerun=false;void sync();}}
     };
     let timer:ReturnType<typeof setTimeout>|undefined;
@@ -312,9 +329,9 @@ export function useIndicators(
     return()=>{disposed=true;source.unsubscribeDataChanged(schedule);volume?.unsubscribeDataChanged(schedule);if(timer!==undefined)clearTimeout(timer);};
     // chartRef/candleSeriesRef are stable refs; colors derived from isDark dep.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIndicators, chartData, isDark, library, volumeData, overrides, admin, sourceSeconds, chartEpoch, liveVolumeRef, scope, isReplaying, history, historyKey, symbol]);
+  }, [activeIndicators, chartData, isDark, library, volumeData, overrides, admin, sourceSeconds, chartEpoch, liveVolumeRef, scope, isReplaying, history, historyKey, symbol,paneRoot]);
 
-  useEffect(()=>{const chart=chartRef.current;const seriesMap=indicatorSeriesRef.current;const cache=cacheRef.current;const guard=guardRef.current;const signatures=signaturesRef.current;return()=>{if(chart)for(const series of seriesMap.values()){try{chart.removeSeries(series);}catch{/* disposed */}}seriesMap.clear();cache.clear();guard.reset();signatures.clear();workerRef.current?.stop();workerRef.current=null;};},[chartEpoch,chartRef]);
+  useEffect(()=>{const chart=chartRef.current;const seriesMap=indicatorSeriesRef.current;const cache=cacheRef.current;const guard=guardRef.current;const signatures=signaturesRef.current;const owners=ownersRef.current;return()=>{if(chart)for(const [key,series] of seriesMap){try{(owners.get(key)??chart).removeSeries(series);}catch{/* disposed */}}owners.clear();seriesMap.clear();paneManagerRef.current?.dispose();paneManagerRef.current=null;cache.clear();guard.reset();signatures.clear();workerRef.current?.stop();workerRef.current=null;};},[chartEpoch,chartRef]);
 
   const replaySlice=isReplaying?chartData:undefined;
   const [sessionHistory,setSessionHistory]=useState<{key:string;rows:CandleData[];step:number}>({key:"",rows:[],step:60});

@@ -57,3 +57,6 @@ Weekly and monthly civil-period options and a 24/7 UTC convention are available.
 
 ## Additional medium corrections
 The expression whitelist now includes trigonometric functions, sign, log10 and remainder. Drawing objects support line styles and an editor for creating all supported commands and validating their properties. Native indicators skip identical-input recomputation within the chart effect. Arbitrary executable TypeScript and independent heap limits remain intentionally unsupported.
+
+## M05 independent lower panes
+Lightweight Charts 4 remains installed. Native RSI, MACD, ATR and STOCH are grouped in separate chart instances with independent right-hand scales; custom math indicators may select a lower pane and a height of 80–320px. Each child chart uses the parent candle timeline and synchronizes visible logical ranges in both directions. Panes are removed when unused and disposed with their chart. Price overlays and drawing primitives remain on the parent. Crosshair synchronization and visual alignment require local verification.

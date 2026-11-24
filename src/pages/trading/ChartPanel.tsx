@@ -1120,6 +1120,7 @@ export function ChartPanel({
   const queryClient = useQueryClient();
   const lastGapRefetchAtRef = useRef<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const paneRootRef=useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
 
@@ -1421,7 +1422,7 @@ export function ChartPanel({
     [onAddDrawing, pipDigits, timeframe, selectedSymbol],
   );
 
-  useIndicators(chartRef, candleSeriesRef, chartData, activeIndicators, isDark, volumeData, indicatorScope, (TF_INTERVAL_MS[timeframe] ?? 60000)/1000, chartEpoch, volumeSeriesRef, isReplaying, selectedSymbol);
+  useIndicators(chartRef, candleSeriesRef, chartData, activeIndicators, isDark, volumeData, indicatorScope, (TF_INTERVAL_MS[timeframe] ?? 60000)/1000, chartEpoch, volumeSeriesRef, isReplaying, selectedSymbol,paneRootRef);
 
   // ── Replay trade event markers ─────────────────────────────
   useEffect(() => {
@@ -1983,7 +1984,8 @@ export function ChartPanel({
   ]);
 
   return (
-    <div className="relative w-full h-full">
+    <div className="flex flex-col w-full h-full min-h-0">
+    <div className="relative w-full flex-1 min-h-0">
       {/* OHLCV Legend Overlay */}
       <ChartLegendHeader
         selectedSymbol={selectedSymbol}
@@ -2120,6 +2122,8 @@ export function ChartPanel({
 
       {/* Left vertical tool rail (TradingView-style grouped flyouts) */}
       <DrawingToolRail drawingTool={drawingTool} onDrawingTool={(t) => onDrawingToolSelect?.(t)} />
+    </div>
+    <div ref={paneRootRef} className="shrink-0 max-h-[55%] overflow-y-auto overflow-x-hidden"/>
     </div>
   );
 }
