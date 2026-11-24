@@ -1171,7 +1171,7 @@ export function ChartPanel({
   // mouse move while the cursor sits outside the plotted data.
   const legendRestoredRef = useRef(true);
 
-  const chartPrefs = useChartPreferences();
+  const chartPrefs = useChartPreferences(indicatorScope);
   // Theme palette with the user's Chart Settings color overrides applied.
   // Everything downstream (chart options, bid/ask lines, position overlays,
   // volume bars) reads from this merged object.
@@ -1422,7 +1422,7 @@ export function ChartPanel({
     [onAddDrawing, pipDigits, timeframe, selectedSymbol],
   );
 
-  useIndicators(chartRef, candleSeriesRef, chartData, activeIndicators, isDark, volumeData, indicatorScope, (TF_INTERVAL_MS[timeframe] ?? 60000)/1000, chartEpoch, volumeSeriesRef, isReplaying, selectedSymbol,paneRootRef);
+  useIndicators(chartRef, candleSeriesRef, chartData, activeIndicators, isDark, volumeData, indicatorScope, (TF_INTERVAL_MS[timeframe] ?? 60000)/1000, chartEpoch, volumeSeriesRef, isReplaying, selectedSymbol,paneRootRef,colors);
 
   // ── Replay trade event markers ─────────────────────────────
   useEffect(() => {
@@ -2110,6 +2110,7 @@ export function ChartPanel({
         open={showChartSettings}
         onClose={() => setShowChartSettings(false)}
         prefs={chartPrefs}
+        indicatorScope={indicatorScope}
         isDark={isDark}
         activePlugins={activePlugins}
         onTogglePlugin={onTogglePlugin}

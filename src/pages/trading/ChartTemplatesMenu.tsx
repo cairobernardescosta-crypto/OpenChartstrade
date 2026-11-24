@@ -245,16 +245,13 @@ export function ChartTemplatesMenu(props: ChartTemplatesMenuProps) {
   const { activeIndicators, onSetIndicators, activePlugins, onSetPlugins, indicatorScope="primary" } = props;
   const library=useIndicatorLibrary();
   const overrides=useOverrides(indicatorScope);
-  const prefs = useChartPreferences();
+  const prefs = useChartPreferences(indicatorScope);
   const { templates, save, remove } = useChartTemplates();
   const [open, setOpen] = useState(false);
-  const [manageMode, setManageMode] = useState(false);
-
-  const [secondaryName,setSecondaryName]=useState(()=>{try{return localStorage.getItem("oc_secondary_template")??"";}catch{return "";}});
-  const [secondaryAutosave,setSecondaryAutosave]=useState(false);
-  const activeName = indicatorScope==="primary"?prefs.activeChartTemplate:secondaryName;
-  const autosave = indicatorScope==="primary"?prefs.chartTemplateAutosave:secondaryAutosave;
-  const setActiveName=(name:string)=>{if(indicatorScope==="primary")updateChartPreferences({activeChartTemplate:name});else{setSecondaryName(name);try{localStorage.setItem("oc_secondary_template",name);}catch{/* unavailable */}}};
+  const [manageMode, setManageMode] = useS  const activeName=prefs.activeChartTemplate;
+  const autosave=prefs.chartTemplateAutosave;
+  const setActiveName=(name:string)=>updateChartPreferences({activeChartTemplate:name},indicatorScope);
+ilable */}}};
   const content:ChartTemplateContent = {...snapshotContent(prefs, activeIndicators, activePlugins), ...buildTemplateSnapshot(library,overrides,activeIndicators)};
 
   // react-query guarantees `mutate` identity is stable across renders.
@@ -275,7 +272,7 @@ export function ChartTemplatesMenu(props: ChartTemplatesMenuProps) {
       replaceChartOverrides(indicatorScope,prepared.overrides);
       const available=new Set(prepared.available.map(x=>"custom:"+x.id));
       const ids=(c.indicators??[]).filter(id=>typeof id==="string"&&(available.has(id)||INDICATOR_REGISTRY.some(x=>x.type===id))) as IndicatorType[];
-      if(indicatorScope==="primary")updateChartPreferences(contentToPrefsPatch(c));
+      updateChartPreferences(contentToPrefsPatch(c),indicatorScope);
       setActiveName(t.name);
       onSetIndicators(ids);
     } catch(e){toast.error("Templates",e instanceof Error?e.message:"Invalid indicator snapshot");return;}
@@ -319,7 +316,7 @@ export function ChartTemplatesMenu(props: ChartTemplatesMenuProps) {
             </div>
             <AutosaveRow
               enabled={autosave}
-              onToggle={() => indicatorScope==="primary"?updateChartPreferences({ chartTemplateAutosave: !autosave }):setSecondaryAutosave(v=>!v)}
+              onToggle={() => updateChartPreferences({ chartTemplateAutosave: !autosave },indicatorScope)}
             />
             <AddTemplateRow onAdd={addTemplate} />
             <MenuRow

@@ -26,7 +26,7 @@ import { SessionCandlePrimitive } from "../../lib/indicator-sdk/renderer";
 import {IndependentHistoryCache,alignHistoryPoints,historyPlan,historyMaxAge} from "../../lib/indicator-sdk/independent-history";
 import type {CandleData} from "../../lib/indicators";
 import {api} from "../../services/api.ts";
-import {IndicatorPanes,nativePaneKey} from "./indicator-panes";
+import {IndicatorPanes,nativePaneKey,type PaneColors} from "./indicator-panes";
 import { CHART_COLORS } from "./constants.ts";
 
 const independentHistory=new IndependentHistoryCache((symbol,timeframe,limit,toMs)=>api.getCandles(symbol,timeframe,limit,{toMs}));
@@ -45,6 +45,7 @@ export function useIndicators(
   isReplaying=false,
   symbol="",
   paneRoot?:React.RefObject<HTMLDivElement|null>,
+  visualColors?:PaneColors,
 ): void {
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<"Line"> | ISeriesApi<"Histogram"> | ISeriesApi<"Area">>>(
     new Map(),
@@ -59,7 +60,7 @@ export function useIndicators(
   const library = useIndicatorLibrary();
   const admin = useIndicatorAdmin();
   const overrides = useOverrides(scope);
-  const colors = isDark ? CHART_COLORS.dark : CHART_COLORS.light;
+  const colors = visualColors??(isDark ? CHART_COLORS.dark : CHART_COLORS.light);
   const [history,setHistory]=useState<{key:string;rows:Record<number,CandleData[]>;errors?:Record<number,string>}>({key:"",rows:{}});
   const allowedCustom=activeIndicators.filter(x=>x.startsWith("custom:")).slice(0,admin.maxActive);
   const requestedPeriods=[...new Set(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind!=="graphics"&&x.kind!=="session-candle"&&x.historySource==="independent"&&historyPlan(x.aggregation)).map(x=>x.aggregation))].sort((a,b)=>a-b);
@@ -80,6 +81,7 @@ export function useIndicators(
     const source=candleSeriesRef.current;
     const owners=ownersRef.current;
     const panes=paneRoot?.current?(paneManagerRef.current??=new IndicatorPanes(chart,paneRoot.current,colors)):null;
+    panes?.updateColors(colors);
     const usedPanes=new Set<string>();
     const remove=(key:string)=>{const series=indicatorSeriesRef.current.get(key);if(series)try{(owners.get(key)??chart).removeSeries(series);}catch{/* disposed */}owners.delete(key);indicatorSeriesRef.current.delete(key);};
     const target=(key:string,customPane?:{id:string;label:string;height:number})=>{const id=customPane?.id??nativePaneKey(key);if(!id||!panes)return chart;usedPanes.add(id);return panes.get(id,customPane?.label??id,customPane?.height);};
@@ -329,7 +331,7 @@ export function useIndicators(
     return()=>{disposed=true;source.unsubscribeDataChanged(schedule);volume?.unsubscribeDataChanged(schedule);if(timer!==undefined)clearTimeout(timer);};
     // chartRef/candleSeriesRef are stable refs; colors derived from isDark dep.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIndicators, chartData, isDark, library, volumeData, overrides, admin, sourceSeconds, chartEpoch, liveVolumeRef, scope, isReplaying, history, historyKey, symbol,paneRoot]);
+  }, [activeIndicators, chartData, isDark, library, volumeData, overrides, admin, sourceSeconds, chartEpoch, liveVolumeRef, scope, isReplaying, history, historyKey, symbol,paneRoot,colors]);
 
   useEffect(()=>{const chart=chartRef.current;const seriesMap=indicatorSeriesRef.current;const cache=cacheRef.current;const guard=guardRef.current;const signatures=signaturesRef.current;const owners=ownersRef.current;return()=>{if(chart)for(const [key,series] of seriesMap){try{(owners.get(key)??chart).removeSeries(series);}catch{/* disposed */}}owners.clear();seriesMap.clear();paneManagerRef.current?.dispose();paneManagerRef.current=null;cache.clear();guard.reset();signatures.clear();workerRef.current?.stop();workerRef.current=null;};},[chartEpoch,chartRef]);
 

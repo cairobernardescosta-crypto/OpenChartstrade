@@ -6,7 +6,7 @@ import { useCandles } from "../services/queries.ts";
 import { useHoverCollapse } from "../hooks/useHoverCollapse.ts";
 import { safeStorage } from "../lib/safe-storage.ts";
 import type { PlaceOrderInput } from "../services/schemas.ts";
-import { updateChartPreferences } from "../hooks/useChartPreferences.ts";
+import { updateChartPreferences,useChartPreferences } from "../hooks/useChartPreferences.ts";
 import { useTradingStore } from "../services/store.tsx";
 import { useTerminal } from "../terminal/use-terminal.ts";
 import { BottomPanel } from "./trading/BottomPanel.tsx";
@@ -100,6 +100,8 @@ export function TradingPage() {
   const [showIndicatorMenu, setShowIndicatorMenu] = useState(false);
   const [chartLayout, setChartLayout] = useState<"single" | "split">("single");
   const [activeChart, setActiveChart] = useState<"primary" | "secondary">("primary");
+  const secondaryPrefs=useChartPreferences("secondary");
+  const focusedPrefs=activeChart==="primary"?chartPrefs:secondaryPrefs;
   // The secondary chart owns its market and indicator state. It starts on 1h
   // so split mode is useful immediately for multi-timeframe analysis.
   const [secondarySymbol, setSecondarySymbol] = useState(selectedSymbol);
@@ -307,11 +309,11 @@ export function TradingPage() {
         onTogglePlugin={activeChart === "primary" ? handleTogglePlugin : toggleSecondaryPlugin}
         onSetIndicators={activeChart === "primary" ? setIndicators : setSecondaryIndicatorsFromToolbar}
         onSetPlugins={activeChart === "primary" ? handleSetPlugins : setSecondaryPlugins}
-        magnetMode={chartPrefs.magnetMode}
+        magnetMode={focusedPrefs.magnetMode}
         onCycleMagnet={cycleMagnetMode}
-        stayInDrawingMode={chartPrefs.stayInDrawingMode}
+        stayInDrawingMode={focusedPrefs.stayInDrawingMode}
         onToggleStayInDrawingMode={() =>
-          updateChartPreferences({ stayInDrawingMode: !chartPrefs.stayInDrawingMode })
+          updateChartPreferences({ stayInDrawingMode: !focusedPrefs.stayInDrawingMode },activeChart)
         }
       />
 
@@ -377,8 +379,8 @@ export function TradingPage() {
                     onRemoveDrawing={removeSecondaryDrawing}
                     onDrawingComplete={() => setSecondaryDrawingTool("none")}
                     onDrawingToolSelect={setSecondaryDrawingTool}
-                    magnetMode={chartPrefs.magnetMode}
-                    stayInDrawingMode={chartPrefs.stayInDrawingMode}
+                    magnetMode={secondaryPrefs.magnetMode}
+                    stayInDrawingMode={secondaryPrefs.stayInDrawingMode}
                     positions={[]}
                     orders={[]}
                     tick={secondaryTick}

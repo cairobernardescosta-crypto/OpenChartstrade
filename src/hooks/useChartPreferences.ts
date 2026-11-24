@@ -202,8 +202,16 @@ function toStringArray(input: string | undefined, fallback: string[]): string[] 
   }
 }
 
-export function getChartPreferencesFromStorage(): ChartPreferences {
-  const prefs = readTraderPrefs();
+export type VisualChartScope="primary"|"secondary";
+const SECONDARY_PREFIX="chart.secondary.";
+export function scopedChartPreferences(raw:TraderPrefs,scope:VisualChartScope):TraderPrefs {
+  if(scope==="primary")return raw;
+  const scoped:TraderPrefs={};
+  for(const key of [...BOOL_PREF_KEYS,...STRING_PREF_KEYS,"magnetMode","activePlugins"]){const value=raw[SECONDARY_PREFIX+key];if(value!==undefined)scoped[key]=value;}
+  return scoped;
+}
+export function getChartPreferencesFromStorage(scope:VisualChartScope="primary"): ChartPreferences {
+  const prefs = scopedChartPreferences(readTraderPrefs(),scope);
   const result = { ...DEFAULT_CHART_PREFS };
   for (const key of BOOL_PREF_KEYS) {
     result[key] = toBool(prefs[key], DEFAULT_CHART_PREFS[key]);
@@ -218,13 +226,13 @@ export function getChartPreferencesFromStorage(): ChartPreferences {
   return result;
 }
 
-export function updateChartPreferences(patch: Partial<ChartPreferences>): TraderPrefs {
+export function updateChartPreferences(patch: Partial<ChartPreferences>,scope:VisualChartScope="primary"): TraderPrefs {
   const next: TraderPrefs = { ...readTraderPrefs() };
   for (const [key, value] of Object.entries(patch)) {
     if (value == null) continue;
     // Strings store raw; booleans/arrays serialise to "true"/"false"/JSON —
     // the exact formats toBool/toStringArray parse back.
-    next[key] = typeof value === "string" ? value : JSON.stringify(value);
+    next[scope==="secondary"?SECONDARY_PREFIX+key:key] = typeof value === "string" ? value : JSON.stringify(value);
   }
 
   const userId = useAuthStore.getState().user?.id;
@@ -237,19 +245,20 @@ export function notifyChartPreferencesUpdated(): void {
   dispatchChartPrefsUpdated();
 }
 
-export function useChartPreferences(): ChartPreferences {
+export function useChartPreferences(scope:VisualChartScope="primary"): ChartPreferences {
   const userId = useAuthStore((s) => s.user?.id);
-  const [prefs, setPrefs] = useState<ChartPreferences>(() => getChartPreferencesFromStorage());
+  const [prefs, setPrefs] = useState<ChartPreferences>(() => getChartPreferencesFromStorage(scope));
 
   useEffect(() => {
-    const refresh = () => setPrefs(getChartPreferencesFromStorage());
+    const refresh = () => setPrefs(getChartPreferencesFromStorage(scope));
+    refresh();
     window.addEventListener("storage", refresh);
     window.addEventListener(CHART_PREFS_UPDATED_EVENT, refresh);
     return () => {
       window.removeEventListener("storage", refresh);
       window.removeEventListener(CHART_PREFS_UPDATED_EVENT, refresh);
     };
-  }, [userId]);
+  }, [userId,scope]);
 
   return prefs;
 }

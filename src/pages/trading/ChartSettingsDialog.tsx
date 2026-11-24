@@ -9,8 +9,8 @@ import {
   X,
 } from "lucide-react";
 import { isHyperliquidMode } from "../../hyperliquid/ui/mode.ts";
-import { useState, type ReactNode } from "react";
-import { type ChartPreferences, updateChartPreferences } from "../../hooks/useChartPreferences.ts";
+import { createContext,useContext,useState, type ReactNode } from "react";
+import { type ChartPreferences, type VisualChartScope, updateChartPreferences } from "../../hooks/useChartPreferences.ts";
 import { useDragOffset } from "../../hooks/useDragOffset.ts";
 import { cn } from "../../lib/utils.ts";
 import { CHART_COLORS, type ChartColors } from "./constants.ts";
@@ -21,7 +21,10 @@ import { CHART_COLORS, type ChartColors } from "./constants.ts";
 // subscribers — the chart applies changes live, no Save button needed.
 // The dialog is draggable by its header so it can be moved off the chart area.
 
+const ScopeContext=createContext<VisualChartScope>("primary");
+function useScopedSetter(){const scope=useContext(ScopeContext);return (patch:Partial<ChartPreferences>)=>updateChartPreferences(patch,scope);}
 export interface ChartSettingsDialogProps {
+  indicatorScope?:VisualChartScope;
   open: boolean;
   onClose: () => void;
   prefs: ChartPreferences;
@@ -206,7 +209,7 @@ function SectionTitle({ children }: { children: ReactNode }) {
 }
 
 function AppearanceTab({ prefs }: { prefs: ChartPreferences }) {
-  const set = updateChartPreferences;
+  const set = useScopedSetter();
   return (
     <div>
       <SectionTitle>Candles</SectionTitle>
@@ -249,7 +252,7 @@ function AppearanceTab({ prefs }: { prefs: ChartPreferences }) {
 }
 
 function ElementColorRows({ prefs, theme }: { prefs: ChartPreferences; theme: ChartColors }) {
-  const set = updateChartPreferences;
+  const set = useScopedSetter();
   return (
     <>
       <SectionTitle>Chart elements</SectionTitle>
@@ -282,7 +285,7 @@ function ElementColorRows({ prefs, theme }: { prefs: ChartPreferences; theme: Ch
 }
 
 function LineColorRows({ prefs, theme }: { prefs: ChartPreferences; theme: ChartColors }) {
-  const set = updateChartPreferences;
+  const set = useScopedSetter();
   return (
     <>
       <SectionTitle>Price &amp; order lines</SectionTitle>
@@ -335,7 +338,7 @@ function LineColorRows({ prefs, theme }: { prefs: ChartPreferences; theme: Chart
 
 function ColorsTab({ prefs, isDark }: { prefs: ChartPreferences; isDark: boolean }) {
   const theme = isDark ? CHART_COLORS.dark : CHART_COLORS.light;
-  const set = updateChartPreferences;
+  const set = useScopedSetter();
   return (
     <div>
       <ElementColorRows prefs={prefs} theme={theme} />
@@ -359,7 +362,7 @@ function ColorsTab({ prefs, isDark }: { prefs: ChartPreferences; isDark: boolean
 }
 
 function TradingTab({ prefs }: { prefs: ChartPreferences }) {
-  const set = updateChartPreferences;
+  const set = useScopedSetter();
   return (
     <div>
       <SectionTitle>Price lines</SectionTitle>
@@ -431,7 +434,7 @@ function EventsTab({
 }
 
 function ChallengeTab({ prefs, hasAccount }: { prefs: ChartPreferences; hasAccount: boolean }) {
-  const set = updateChartPreferences;
+  const set = useScopedSetter();
   const master = prefs.challengeOverlay;
   return (
     <div>
@@ -551,14 +554,14 @@ export function ChartSettingsDialog(props: ChartSettingsDialogProps) {
             ))}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-            <TabBody tab={tab} props={{ ...props, onClose: close }} />
+            <ScopeContext.Provider value={props.indicatorScope??"primary"}><TabBody tab={tab} props={{ ...props, onClose: close }} /></ScopeContext.Provider>
           </div>
         </div>
         {/* Footer */}
         <div className="flex items-center justify-between border-t border-border px-3 py-2">
           {resetPayload ? (
             <button
-              onClick={() => updateChartPreferences(resetPayload)}
+              onClick={() => updateChartPreferences(resetPayload,props.indicatorScope??"primary")}
               className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground"
             >
               <RotateCcw className="h-3 w-3" />

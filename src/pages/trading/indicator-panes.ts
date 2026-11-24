@@ -1,10 +1,11 @@
 import {createChart,ColorType,LineStyle,type IChartApi,type ISeriesApi,type Time,type LogicalRange} from "lightweight-charts";
 export function nativePaneKey(key:string):string|null{for(const name of ["RSI","MACD","ATR","STOCH"])if(key===name||key.startsWith(name+"-"))return name;return null;}
 type Pane={chart:IChartApi;host:HTMLDivElement;timeline:ISeriesApi<"Line">;observer:ResizeObserver;onRange:(range:LogicalRange|null)=>void};
-type Colors={background:string;text:string;grid:string};
+export type PaneColors={background:string;text:string;grid:string};
 export class IndicatorPanes {
  private panes=new Map<string,Pane>();private syncing=false;private times:Time[]=[];private signature="";private readonly onMainRange=(range:LogicalRange|null)=>this.sync(this.main,range);
- constructor(private main:IChartApi,private root:HTMLDivElement,private colors:Colors){main.timeScale().subscribeVisibleLogicalRangeChange(this.onMainRange);}
+ constructor(private main:IChartApi,private root:HTMLDivElement,private colors:PaneColors){main.timeScale().subscribeVisibleLogicalRangeChange(this.onMainRange);}
+ updateColors(colors:PaneColors){this.colors=colors;for(const p of this.panes.values())p.chart.applyOptions({layout:{background:{type:ColorType.Solid,color:colors.background},textColor:colors.text},grid:{vertLines:{color:colors.grid},horzLines:{color:colors.grid}}});}
  private sync(source:IChartApi,range:LogicalRange|null){if(this.syncing||!range)return;this.syncing=true;try{for(const chart of [this.main,...[...this.panes.values()].map(p=>p.chart)])if(chart!==source)chart.timeScale().setVisibleLogicalRange(range);}finally{this.syncing=false;}}
  setTimeline(times:Time[]){const signature=times.join(",");if(signature===this.signature)return;this.signature=signature;this.times=times;for(const p of this.panes.values())p.timeline.setData(times.map(time=>({time})));this.sync(this.main,this.main.timeScale().getVisibleLogicalRange());}
  get(key:string,label:string,height=120):IChartApi{

@@ -63,3 +63,6 @@ Lightweight Charts 4 remains installed. Native RSI, MACD, ATR and STOCH are grou
 
 ## M10 workspace backup
 Version 2 optionally includes saved chart templates and adapter-persisted drawings grouped by symbol. Version 1 remains accepted. Restore merges template names and drawing IDs, preserving unrelated records. All sections are validated before writes. Native adapter storage does not provide transactions, so failed restores attempt compensating rollback and report incomplete rollback. Export covers currently listed symbols and the persisted drawing index; unsaved secondary-chart drawings are not included. Wallet, account credentials, journal and orders are excluded. Local validation pending.
+
+## M17 visual preferences
+Primary preferences retain their existing keys. Secondary preferences are stored in the same user-scoped preference store under chart.secondary.* with independent defaults. Settings dialogs and template snapshots apply to their own chart; lower panes follow their owning chart colors. Drawing interaction preferences are scoped as well. Existing primary settings remain unchanged. Local visual, persistence and template verification pending.
