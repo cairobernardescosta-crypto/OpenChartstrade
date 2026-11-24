@@ -84,3 +84,6 @@ The indicator editor uses the selected chart's actual closed bars, or independen
 
 ## L01 interface em português
 Rótulos da biblioteca, editor, prévia, administração e backup traduzidos para pt-BR. Identificadores de esquema, valores dos selects, código importado e formatos persistidos permanecem inalterados. Mensagens técnicas adicionais serão tratadas em L06. Corrigido também um fragmento JSX malformado na área de altura do painel e cor. Validação local pendente.
+
+## L02 ações compactas
+A lista mantém ativação e favoritos visíveis; edição global, edição por gráfico, duplicação, revisões, código, restauração, exportação e desinstalação ficam em uma expansão de ações. Fechamento por clique externo ou Escape, confirmação de desinstalação preservada. Validação local pendente.

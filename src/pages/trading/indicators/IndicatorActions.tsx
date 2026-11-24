@@ -1,0 +1,8 @@
+import {useEffect,useRef,useState} from "react";
+import {MoreHorizontal} from "lucide-react";
+type Action={label:string;run:()=>void;disabled?:boolean;danger?:boolean};
+export function IndicatorActions({name,actions}:{name:string;actions:readonly Action[]}){
+ const [open,setOpen]=useState(false);const root=useRef<HTMLDivElement>(null);const trigger=useRef<HTMLButtonElement>(null);
+ useEffect(()=>{if(!open)return;const outside=(e:PointerEvent)=>{if(e.target instanceof Node&&!root.current?.contains(e.target))setOpen(false);};const escape=(e:KeyboardEvent)=>{if(e.key==="Escape"){setOpen(false);trigger.current?.focus();}};document.addEventListener("pointerdown",outside);document.addEventListener("keydown",escape);return()=>{document.removeEventListener("pointerdown",outside);document.removeEventListener("keydown",escape);};},[open]);
+ return <div ref={root} className={open?"basis-full min-w-0":"shrink-0"}><button ref={trigger} type="button" aria-label={"Mais ações de "+name} aria-expanded={open} className="rounded p-1 hover:bg-secondary focus-visible:outline focus-visible:outline-1" onClick={()=>setOpen(v=>!v)}><MoreHorizontal className="h-4 w-4"/></button>{open&&<div className="mt-1 w-full min-w-[160px] rounded border border-border bg-card p-1 shadow-sm" role="group" aria-label={"Ações de "+name}>{actions.map(a=><button key={a.label} type="button" disabled={a.disabled} className={"block w-full rounded px-2 py-1.5 text-left text-xs hover:bg-secondary disabled:opacity-40 "+(a.danger?"text-red-400":"")} onClick={()=>{setOpen(false);trigger.current?.focus();a.run();}}>{a.label}</button>)}</div>}</div>;
+}
