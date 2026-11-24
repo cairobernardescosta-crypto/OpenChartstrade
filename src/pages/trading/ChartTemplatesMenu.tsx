@@ -84,7 +84,7 @@ function useTemplateAutosave(
   enabled: boolean,
   activeName: string,
   content: ChartTemplateContent,
-  saveFn: (vars: { name: string; content: ChartTemplateContent }) => void,
+  saveFn: (vars: { name: string; content: ChartTemplateContent }) => Promise<unknown>,
 ): void {
   const timerRef = useRef<number | null>(null);
   // Serialise so the effect only fires on real changes, not object identity.
@@ -98,7 +98,7 @@ function useTemplateAutosave(
     if(!previous||previous.name!==activeName||previous.serialized===serialized)return;
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => {
-      saveFn({ name: activeName, content: JSON.parse(serialized) as ChartTemplateContent });
+      void saveFn({ name: activeName, content: JSON.parse(serialized) as ChartTemplateContent });
     }, AUTOSAVE_DEBOUNCE_MS);
     return () => {
       if (timerRef.current !== null) window.clearTimeout(timerRef.current);
@@ -251,14 +251,13 @@ export function ChartTemplatesMenu(props: ChartTemplatesMenuProps) {
   const [manageMode, setManageMode] = useState(false);
   const activeName=prefs.activeChartTemplate;
   const autosave=prefs.chartTemplateAutosave;
-  const setActiveName=(name:string)=>updateChartPreferences({activeChartTemplate:name},indicatorScope);
   const content:ChartTemplateContent = {...snapshotContent(prefs, activeIndicators, activePlugins), ...buildTemplateSnapshot(library,overrides,activeIndicators)};
 
   // react-query guarantees `mutate` identity is stable across renders.
-  const { mutate: saveMutate } = save;
+  const { mutateAsync: saveMutate } = save;
   const saveFn = useCallback(
-    (vars: { name: string; content: ChartTemplateContent }) => saveMutate({...vars,name:indicatorScope==="secondary"?"[secondary] "+vars.name:vars.name}),
-    [saveMutate,indicatorScope],
+    (vars: { name: string; content: ChartTemplateContent }) => saveMutate(vars),
+    [saveMutate],
   );
   useTemplateAutosave(autosave, activeName, content, saveFn);
 
@@ -269,11 +268,13 @@ export function ChartTemplatesMenu(props: ChartTemplatesMenuProps) {
       assertLibraryReady();assertOverridesReady();
       const prepared=prepareTemplateSnapshot(library,c.importedDefinitions,c.importedOverrides,c.indicators??[]);
       installMissingDefinitions(prepared.missing);
-      replaceChartOverrides(indicatorScope,prepared.overrides);
+      replaceChartOverrides("primary",prepared.overrides);
+      replaceChartOverrides("secondary",prepared.overrides);
       const available=new Set(prepared.available.map(x=>"custom:"+x.id));
       const ids=(c.indicators??[]).filter(id=>typeof id==="string"&&(available.has(id)||INDICATOR_REGISTRY.some(x=>x.type===id))) as IndicatorType[];
-      updateChartPreferences(contentToPrefsPatch(c),indicatorScope);
-      setActiveName(t.name);
+      const patch=contentToPrefsPatch(c);
+      updateChartPreferences({...patch,activeChartTemplate:t.name},"primary");
+      updateChartPreferences({...patch,activeChartTemplate:t.name},"secondary");
       onSetIndicators(ids);
     } catch(e){toast.error("Templates",e instanceof Error?e.message:"Invalid indicator snapshot");return;}
     onSetPlugins(c.plugins ?? []);
@@ -281,15 +282,21 @@ export function ChartTemplatesMenu(props: ChartTemplatesMenuProps) {
     toast.info("Templates", `Loaded "${t.name}"`);
   };
 
-  const addTemplate = (name: string) => {
-    saveFn({ name, content });
-    setActiveName(name);
-    toast.success("Templates", `Saved "${name}"`);
+  const addTemplate = async (name: string) => {
+    try {
+      await saveFn({ name, content });
+      updateChartPreferences({activeChartTemplate:name},"primary");
+      updateChartPreferences({activeChartTemplate:name},"secondary");
+      toast.success("Templates", `Saved "${name}"`);
+    } catch { /* useMutation already reports the persistence failure */ }
   };
 
   const deleteTemplate = (t: ChartTemplate) => {
     remove.mutate(t.id);
-    if (t.name === activeName) setActiveName("");
+    if (t.name === activeName) {
+      updateChartPreferences({activeChartTemplate:""},"primary");
+      updateChartPreferences({activeChartTemplate:""},"secondary");
+    }
   };
 
   return (
@@ -324,8 +331,9 @@ export function ChartTemplatesMenu(props: ChartTemplatesMenuProps) {
               label={activeName ? `Save "${activeName}"` : "Save template"}
               disabled={!activeName || autosave}
               onClick={() => {
-                saveFn({ name: activeName, content });
-                toast.success("Templates", `Saved "${activeName}"`);
+                void saveFn({ name: activeName, content }).then(() => {
+                  toast.success("Templates", `Saved "${activeName}"`);
+                }).catch(() => undefined);
               }}
             />
             <MenuRow
@@ -339,7 +347,7 @@ export function ChartTemplatesMenu(props: ChartTemplatesMenuProps) {
             </div>
             <div className="max-h-48 overflow-y-auto">
               <TemplateList
-                templates={templates.filter(t=>indicatorScope==="secondary"?t.name.startsWith("[secondary] "):!t.name.startsWith("[secondary] ")).map(t=>indicatorScope==="secondary"?{...t,name:t.name.slice(12)}:t)}
+                templates={templates}
                 activeName={activeName}
                 manageMode={manageMode}
                 onApply={applyTemplate}

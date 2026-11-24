@@ -25,7 +25,18 @@ const KEY = "oc_chart_templates";
 
 function readAll(): ChartTemplate[] {
   try {
-    return JSON.parse(safeStorage.getItem(KEY) ?? "[]");
+    const rows = JSON.parse(safeStorage.getItem(KEY) ?? "[]") as ChartTemplate[];
+    const normalized = new Map<string, ChartTemplate>();
+    // Templates used to be hidden behind a "[secondary] " prefix. Keep those
+    // records compatible, but expose one shared catalogue for both charts.
+    for (const row of rows) {
+      const name = row.name.startsWith("[secondary] ") ? row.name.slice(12) : row.name;
+      const current = normalized.get(name);
+      if (!current || !row.name.startsWith("[secondary] ")) {
+        normalized.set(name, { ...row, name });
+      }
+    }
+    return [...normalized.values()];
   } catch {
     return [];
   }

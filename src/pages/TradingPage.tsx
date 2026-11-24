@@ -294,9 +294,6 @@ export function TradingPage() {
     },
     [activeIndicators, toggleIndicator],
   );
-  const setSecondaryIndicatorsFromToolbar = useCallback((next: IndicatorType[]) => {
-    setSecondaryIndicators(next);
-  }, []);
   const ticks = useTradingStore((s) => s.ticks);
   const { data: secondaryCandles = [] } = useCandles(secondarySymbol, secondaryTimeframe, 400, undefined, false, chartLayout === "split");
   const secondaryTick = useTradingStore((s) => s.ticks[secondarySymbol]);
@@ -318,6 +315,21 @@ export function TradingPage() {
   }, []);
   const clearSecondaryIndicators = useCallback(() => setSecondaryIndicators([]), []);
 
+  const handleSynchronizedSymbolChange = useCallback((symbol: string) => {
+    setSelectedSymbol(symbol);
+    setSecondarySymbol(symbol);
+  }, [setSelectedSymbol]);
+
+  const setTemplateIndicators = useCallback((next: IndicatorType[]) => {
+    setIndicators(next);
+    setSecondaryIndicators(next);
+  }, [setIndicators]);
+
+  const setTemplatePlugins = useCallback((ids: string[]) => {
+    handleSetPlugins(ids);
+    setSecondaryPlugins(ids);
+  }, [handleSetPlugins]);
+
 
   return (
 
@@ -337,7 +349,7 @@ export function TradingPage() {
         previewCandles={activeChart==="primary"?(replayCandles??candles??[]):secondaryCandles}
         selectedSymbol={activeChart === "primary" ? selectedSymbol : secondarySymbol}
         symbols={symbols}
-        onSymbolChange={activeChart === "primary" ? setSelectedSymbol : setSecondarySymbol}
+        onSymbolChange={handleSynchronizedSymbolChange}
         timeframe={activeChart === "primary" ? timeframe : secondaryTimeframe}
         onTimeframeChange={activeChart === "primary" ? handleTimeframeChange : setSecondaryTimeframe}
         chartLayout={chartLayout}
@@ -364,8 +376,8 @@ export function TradingPage() {
         replayAccountId={activeChart === "primary" ? activeAccountId : null}
         activePlugins={activeChart === "primary" ? activePlugins : secondaryPlugins}
         onTogglePlugin={activeChart === "primary" ? handleTogglePlugin : toggleSecondaryPlugin}
-        onSetIndicators={activeChart === "primary" ? setIndicators : setSecondaryIndicatorsFromToolbar}
-        onSetPlugins={activeChart === "primary" ? handleSetPlugins : setSecondaryPlugins}
+        onSetIndicators={setTemplateIndicators}
+        onSetPlugins={setTemplatePlugins}
         magnetMode={focusedPrefs.magnetMode}
         onCycleMagnet={cycleMagnetMode}
         stayInDrawingMode={focusedPrefs.stayInDrawingMode}
@@ -517,8 +529,8 @@ export function TradingPage() {
                 accountId={activeAccountId}
                 onModifyPosition={setModifyingPosition}
                 onModifyOrder={setModifyingOrder}
-                onSelectPositionSymbol={setSelectedSymbol}
-                onSelectOrderSymbol={setSelectedSymbol}
+                onSelectPositionSymbol={handleSynchronizedSymbolChange}
+                onSelectOrderSymbol={handleSynchronizedSymbolChange}
                 height={bottomPanelHeight}
                 isFeedConnected={isFeedConnected}
                 journalEntries={journalEntries}
@@ -598,7 +610,7 @@ export function TradingPage() {
                 symbols={symbols}
                 ticks={ticks}
                 selectedSymbol={selectedSymbol}
-                onSelect={setSelectedSymbol}
+                onSelect={handleSynchronizedSymbolChange}
                 oneClick={oneClick}
                 accountId={activeAccountId}
                 isFeedConnected={isFeedConnected}
