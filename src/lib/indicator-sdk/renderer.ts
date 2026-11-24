@@ -7,16 +7,18 @@ import type { CandleData } from "../indicators";
 
 export class SessionCandlePrimitive extends PluginBase {
   private range: SessionRange|null=null;
+  private timer:ReturnType<typeof setInterval>|undefined;
   private readonly view: ISeriesPrimitivePaneView;
   constructor(private readonly config:ImportedIndicator,private readonly sourceSeconds=60,private readonly maxBars=5000,private readonly replayData?:readonly import("lightweight-charts").CandlestickData<Time>[]) {
     super();
     this.view={renderer:()=>({draw:(target:CanvasRenderingTarget2D)=>this.draw(target)} satisfies ISeriesPrimitivePaneRenderer)};
   }
-  public override attached(param:Parameters<PluginBase["attached"]>[0]) {super.attached(param);this.refresh();}
+  public override attached(param:Parameters<PluginBase["attached"]>[0]) {super.attached(param);this.refresh();if(!this.replayData)this.timer=setInterval(()=>this.refresh(),1000);}
+  public override detached(){if(this.timer!==undefined)clearInterval(this.timer);this.timer=undefined;super.detached();}
   protected override dataUpdated(_scope:DataChangedScope) {this.refresh();}
   private refresh() {
     const candles:CandleData[]=(this.replayData??this.series.data()).slice(-this.maxBars).flatMap(x=>typeof x.time==="number" && "open" in x && "close" in x && "high" in x && "low" in x ? [{time:x.time,open:x.open,high:x.high,low:x.low,close:x.close}] : []);
-    this.range=sessionRange(candles,this.config,this.sourceSeconds);
+    this.range=sessionRange(candles,this.config,this.sourceSeconds,this.replayData?undefined:Math.floor(Date.now()/1000));
     this.requestUpdate();
   }
   paneViews():readonly ISeriesPrimitivePaneView[]{return [this.view];}
@@ -35,8 +37,8 @@ export class SessionCandlePrimitive extends PluginBase {
     target.useMediaCoordinateSpace(({context:ctx,mediaSize})=>{
       const closeX=timeX(r.sessionEnd??r.end);
       const projected=rangeLastX===null?null:projectedCandleX(rangeLastX,step,this.config.offset,this.config.width,mediaSize.width,closeX);
-      const x=projected??Math.min(mediaSize.width,Math.max(0,rangeLastX??xLast));
-      const showProjected=projected!==null;
+      const x=projected??Math.min(mediaSize.width-this.config.width/2-2,Math.max(this.config.width/2+2,rangeLastX??xLast));
+      const showProjected=projected!==null||rangeLastX!==null;
       const line=(x1:number,y1:number,x2:number,y2:number,dash:number[]=[])=>{ctx.setLineDash(dash);ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();};
       ctx.save();ctx.globalAlpha=this.config.opacity;ctx.lineWidth=this.config.lineWidth;ctx.strokeStyle=this.config.lineColor;
       const start=timeX(r.sessionStart??r.start),end=closeX,rangeStart=timeX(r.start),hi=timeX(r.highTime),lo=timeX(r.lowTime);

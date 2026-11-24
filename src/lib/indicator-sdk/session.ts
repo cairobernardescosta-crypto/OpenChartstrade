@@ -27,11 +27,12 @@ function parts(ms: number, fmt: Intl.DateTimeFormat) {
 }
 const minutes = (s: string) => Number(s.slice(0,2))*60+Number(s.slice(3));
 
-export function sessionRange(candles: readonly CandleData[], config: ImportedIndicator, sourceSeconds?:number): SessionRange | null {
+export function sessionRange(candles: readonly CandleData[], config: ImportedIndicator, sourceSeconds?:number,clockSeconds?:number): SessionRange | null {
   const last = candles[candles.length-1];
   if (!last || !Number.isFinite(last.time)) return null;
   const fmt = new Intl.DateTimeFormat("en-GB", {timeZone:config.timezone, year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"});
-  const now = parts(last.time*1000, fmt);
+  const cursor=clockSeconds===undefined?last.time:Math.max(last.time,clockSeconds);
+  const now = parts(cursor*1000, fmt);
   const o = minutes(config.open), c = minutes(config.close);
   let day = now.day - (now.minute < o ? 1 : 0);
   // Keep the last eligible session frozen through non-trading days.
@@ -41,7 +42,7 @@ export function sessionRange(candles: readonly CandleData[], config: ImportedInd
   const start = civilTime(day,o,fmt), end = civilTime(day+(c<=o?1:0),c,fmt);
   if (start === null || end === null || end<=start) return null;
   const duration=config.sessionMinutes==="session"?0:Number(config.sessionMinutes)*60;
-  const segment=duration?Math.max(0,Math.floor((Math.min(last.time,end-1)-start)/duration)):0;
+  const segment=duration?Math.max(0,Math.floor((Math.min(cursor,end-1)-start)/duration)):0;
   const rangeStart=start+segment*duration;
   const rangeEnd=duration?Math.min(end,rangeStart+duration):end;
   if(sourceSeconds!==undefined&&(!Number.isInteger(sourceSeconds)||sourceSeconds<=0||rangeStart%sourceSeconds!==0||rangeEnd%sourceSeconds!==0))return null;
@@ -58,8 +59,8 @@ export function sessionRange(candles: readonly CandleData[], config: ImportedInd
       out.close=bar.close;
     }
   }
-  if(out&&sourceSeconds!==undefined&&last.time>=rangeEnd&&expected!==rangeEnd)return null;
-  if(out){out.sessionStart=start;out.sessionEnd=end;out.closed=last.time>=rangeEnd;}
+  if(out&&sourceSeconds!==undefined&&cursor>=rangeEnd&&expected!==rangeEnd)return null;
+  if(out){out.sessionStart=start;out.sessionEnd=end;out.closed=cursor>=rangeEnd;}
   return out;
 }
 

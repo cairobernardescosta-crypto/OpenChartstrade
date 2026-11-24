@@ -22,7 +22,7 @@ import {RuntimeGuard} from "../../lib/indicator-sdk/runtime";
 import { useIndicatorLibrary } from "../../lib/indicator-sdk/storage";
 import {GraphicPrimitive} from "../../lib/indicator-sdk/graphic-renderer";
 import { SessionCandlePrimitive } from "../../lib/indicator-sdk/renderer";
-import {IndependentHistoryCache,alignHistoryPoints,historyPlan} from "../../lib/indicator-sdk/independent-history";
+import {IndependentHistoryCache,alignHistoryPoints,historyPlan,historyMaxAge} from "../../lib/indicator-sdk/independent-history";
 import type {CandleData} from "../../lib/indicators";
 import {api} from "../../services/api.ts";
 import { CHART_COLORS } from "./constants.ts";
@@ -54,7 +54,7 @@ export function useIndicators(
   const admin = useIndicatorAdmin();
   const overrides = useOverrides(scope);
   const colors = isDark ? CHART_COLORS.dark : CHART_COLORS.light;
-  const [history,setHistory]=useState<{key:string;rows:Record<number,CandleData[]>}>({key:"",rows:{}});
+  const [history,setHistory]=useState<{key:string;rows:Record<number,CandleData[]>;errors?:Record<number,string>}>({key:"",rows:{}});
   const allowedCustom=activeIndicators.filter(x=>x.startsWith("custom:")).slice(0,admin.maxActive);
   const periods=[...new Set(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind!=="graphics"&&x.kind!=="session-candle"&&x.historySource==="independent"&&historyPlan(x.aggregation)).map(x=>x.aggregation))].sort((a,b)=>a-b).slice(0,6);
   const periodKey=periods.join(",");
@@ -62,7 +62,7 @@ export function useIndicators(
   const replayCutoff=isReplaying&&typeof lastTime==="number"?lastTime:0;
   const historyKey=JSON.stringify([symbol,periodKey,isReplaying,replayCutoff]);
   useEffect(()=>{if(!symbol||!periodKey)return;let stopped=false;let running=false;
-    const refresh=async()=>{if(running)return;running=true;try{const cutoff=isReplaying?replayCutoff:Math.floor(Date.now()/1000);if(!cutoff)return;const results=await Promise.allSettled(periodKey.split(",").map(async raw=>{const n=Number(raw);return [n,await independentHistory.get(symbol,n,cutoff)] as const;}));if(!stopped){const rows:Record<number,CandleData[]>={};for(const result of results)if(result.status==="fulfilled")rows[result.value[0]]=result.value[1];setHistory({key:historyKey,rows});}}finally{running=false;}};
+    const refresh=async()=>{if(running)return;running=true;try{const cutoff=isReplaying?replayCutoff:Math.floor(Date.now()/1000);if(!cutoff)return;const results=await Promise.allSettled(periodKey.split(",").map(async raw=>{const n=Number(raw);return [n,await independentHistory.get(symbol,n,cutoff)] as const;}));if(!stopped){const rows:Record<number,CandleData[]>={};const errors:Record<number,string>={};results.forEach((result,index)=>{if(result.status==="fulfilled")rows[result.value[0]]=result.value[1];else errors[Number(periodKey.split(",")[index])]="Market history unavailable";});setHistory({key:historyKey,rows,errors});}}finally{running=false;}};
     void refresh();const timer=isReplaying?undefined:setInterval(()=>void refresh(),30000);return()=>{stopped=true;if(timer!==undefined)clearInterval(timer);};
   },[symbol,periodKey,isReplaying,replayCutoff,historyKey]);
 
@@ -113,8 +113,9 @@ export function useIndicators(
           try {
           const external=entry.historySource==="independent"&&entry.aggregation!==0;
           const bounded=external?(history.key===historyKey?history.rows[entry.aggregation]??[]:[]).slice(-admin.maxBars):aggregation.get(entry.aggregation);
+          if(external&&(!bounded.length||history.errors?.[entry.aggregation])){reportIndicator(scope,entry.id,0,0,history.key!==historyKey?"Loading market history":history.errors?.[entry.aggregation]??"No completed market history");continue;}
           const result=cache.calculate(entry,bounded);
-          const data=external?alignHistoryPoints(result.points,indCandles):entry.aggregation!==0?alignHistoryPoints(result.points.map(p=>({...p,time:p.time+sourceSeconds})),indCandles):result.points;
+          const data=external?alignHistoryPoints(result.points,indCandles,historyMaxAge(entry.aggregation)):entry.aggregation!==0?alignHistoryPoints(result.points.map(p=>({...p,time:p.time+sourceSeconds})),indCandles):result.points;
           if(performance.now()-started>100)throw new Error("Indicator execution budget exceeded");
           const key=type+":"+entry.plot;
           const scaleId=entry.scale==="independent"?"indicator-"+entry.id:"right";

@@ -260,8 +260,8 @@ export function ChartTemplatesMenu(props: ChartTemplatesMenuProps) {
   // react-query guarantees `mutate` identity is stable across renders.
   const { mutate: saveMutate } = save;
   const saveFn = useCallback(
-    (vars: { name: string; content: ChartTemplateContent }) => saveMutate(vars),
-    [saveMutate],
+    (vars: { name: string; content: ChartTemplateContent }) => saveMutate({...vars,name:indicatorScope==="secondary"?"[secondary] "+vars.name:vars.name}),
+    [saveMutate,indicatorScope],
   );
   useTemplateAutosave(autosave, activeName, content, saveFn);
 
@@ -285,7 +285,7 @@ export function ChartTemplatesMenu(props: ChartTemplatesMenuProps) {
   };
 
   const addTemplate = (name: string) => {
-    save.mutate({ name, content });
+    saveFn({ name, content });
     setActiveName(name);
     toast.success("Templates", `Saved "${name}"`);
   };
@@ -327,7 +327,7 @@ export function ChartTemplatesMenu(props: ChartTemplatesMenuProps) {
               label={activeName ? `Save "${activeName}"` : "Save template"}
               disabled={!activeName || autosave}
               onClick={() => {
-                save.mutate({ name: activeName, content });
+                saveFn({ name: activeName, content });
                 toast.success("Templates", `Saved "${activeName}"`);
               }}
             />
@@ -342,7 +342,7 @@ export function ChartTemplatesMenu(props: ChartTemplatesMenuProps) {
             </div>
             <div className="max-h-48 overflow-y-auto">
               <TemplateList
-                templates={templates}
+                templates={templates.filter(t=>indicatorScope==="secondary"?t.name.startsWith("[secondary] "):!t.name.startsWith("[secondary] ")).map(t=>indicatorScope==="secondary"?{...t,name:t.name.slice(12)}:t)}
                 activeName={activeName}
                 manageMode={manageMode}
                 onApply={applyTemplate}

@@ -22,6 +22,7 @@ export const indicatorSchema = z.object({
   visible:z.boolean().default(true),
   historySource:z.enum(["chart","independent"]).default("chart"),
   aggregation:z.number().refine(v=>aggregationMinutes.some(m=>m===v),"Unsupported aggregation").default(0),
+  snapshotBaseVersion:z.string().regex(/^\d+\.\d+\.\d+$/).optional(),
   favorite: z.boolean().default(false),
   author: z.string().max(80).default(""),
   opacity: z.number().min(0.1).max(1).default(1),

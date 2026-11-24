@@ -17,10 +17,10 @@ export function prepareTemplateSnapshot(library:readonly ImportedIndicator[],def
   if(!installed)continue;
   const definition=definitions.find(x=>x.id===id);
   const setting=settings.find(x=>x.id===id);
-  const snapshot=setting&&(!definition||setting.version===definition.version&&setting.kind===definition.kind)?setting:definition;
+  const snapshot=setting&&(!definition||(setting.snapshotBaseVersion??setting.version)===definition.version)?setting:definition;
   if(snapshot){
    // Keep the global library unchanged; use a chart-local validated snapshot.
-   overrides.push({...snapshot,version:installed.version,kind:installed.kind===snapshot.kind?installed.kind:snapshot.kind});
+   overrides.push({...snapshot,snapshotBaseVersion:installed.version});
   }
  }
  return {missing,available,overrides};

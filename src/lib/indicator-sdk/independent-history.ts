@@ -21,9 +21,9 @@ export function completedHistory(rows:readonly CandleData[],minutes:number,cutof
  if(!plan.aggregate)return bars.map(c=>({...c,time:c.time+plan.seconds}));
  return aggregateCompleted(bars,plan.aggregate,plan.seconds,true).map(c=>({...c,time:c.time+plan.seconds}));
 }
-export function alignHistoryPoints(points:readonly IndicatorPoint[],chart:readonly CandleData[]):IndicatorPoint[]{
+export function alignHistoryPoints(points:readonly IndicatorPoint[],chart:readonly CandleData[],maxAge=Infinity):IndicatorPoint[]{
  const result:IndicatorPoint[]=[];let i=0;let current:IndicatorPoint|undefined;
- for(const bar of chart){while(i<points.length&&points[i]!.time<=bar.time)current=points[i++];if(current)result.push({time:bar.time,value:current.value});}
+ for(const bar of chart){while(i<points.length&&points[i]!.time<=bar.time)current=points[i++];if(current&&bar.time-current.time<maxAge)result.push({time:bar.time,value:current.value});}
  return result;
 }
 type Loader=(symbol:string,timeframe:string,limit:number,toMs:number)=>Promise<readonly CandleData[]>;
@@ -43,3 +43,5 @@ export class IndependentHistoryCache{
   return promise;
  }
 }
+
+export function historyMaxAge(minutes:number){return minutes===43200?31*86400:minutes*60;}
