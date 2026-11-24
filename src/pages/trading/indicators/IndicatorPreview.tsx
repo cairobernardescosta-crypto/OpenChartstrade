@@ -1,4 +1,4 @@
-import {indicatorSchema,type ImportedIndicator} from "../../../lib/indicator-sdk/schema";
+import {parameterValues,indicatorSchema,type ImportedIndicator} from "../../../lib/indicator-sdk/schema";
 import {expressionPoints} from "../../../lib/indicator-sdk/expression";
 import {sma,ema} from "../../../lib/indicators";
 const candles=Array.from({length:80},(_,i)=>{const open=100+Math.sin(i/6)*5+i/10;const close=open+Math.sin(i*1.3)*2;return {time:i,open,close,high:Math.max(open,close)+1,low:Math.min(open,close)-1,volume:100+i};});
@@ -16,7 +16,7 @@ export function IndicatorPreview({draft}:{draft:ImportedIndicator}){
     </g>{c.showLabels&&<g fontSize="8" fill="currentColor"><text x="220" y="12" textAnchor="middle">1D</text><text x="15" y="118">{c.open}</text><text x="265" y="118" textAnchor="end">{c.close}</text></g>}
   </svg>;
   if(c.kind==="graphics")return <p className="text-xs text-muted-foreground">{c.graphics.length} validated drawing commands. Activate on chart to view price-anchored objects.</p>;
-  const points=c.kind==="expression"?expressionPoints(candles,c.expression):(c.kind==="sma"?sma:ema)(candles,c.period);
+  const points=c.kind==="expression"?expressionPoints(candles,c.expression,parameterValues(c)):(c.kind==="sma"?sma:ema)(candles,c.period);
   if(!points.length)return <p className="text-xs text-muted-foreground">Insufficient sample history for this period.</p>;
   const low=Math.min(...points.map(p=>p.value)),high=Math.max(...points.map(p=>p.value));
   const coords=points.map(p=>((p.time/79)*260+10)+","+(105-(p.value-low)/(high-low||1)*90)).join(" ");

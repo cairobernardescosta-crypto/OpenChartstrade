@@ -18,3 +18,6 @@ Templates now include active imported definitions and chart-specific overrides. 
 
 ## Primary persistence
 IndexedDB records are read on startup, validated and migrated from the compatibility cache only if absent. LocalStorage remains a best-effort recovery cache. In-session revisions prevent delayed hydration from overwriting a newer local edit. Library, history, chart overrides and admin settings are persisted. Multi-tab conflicts, crash durability and migration require browser tests before release.
+
+## Parameter and plot increment
+Bounded expression functions abs/sqrt/log/exp/floor/ceil/round and up to 20 named numeric parameters (p_ prefix) are interpreted without JavaScript execution. Custom math can render as line, area or histogram. Category and active filters and per-chart visibility are available. True separate panes and arbitrary TypeScript remain unsupported. Tests added, not run.

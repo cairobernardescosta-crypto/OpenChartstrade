@@ -18,6 +18,7 @@ import { useOverrides, resolveIndicator, type ChartScope } from "../../lib/indic
 import {useIndicatorAdmin} from "../../lib/indicator-sdk/admin";
 import {reportIndicator} from "../../lib/indicator-sdk/diagnostics";
 import {aggregateCompleted} from "../../lib/indicator-sdk/aggregate";
+import {parameterValues} from "../../lib/indicator-sdk/schema";
 import { expressionPoints } from "../../lib/indicator-sdk/expression";
 import { useIndicatorLibrary } from "../../lib/indicator-sdk/storage";
 import {GraphicPrimitive} from "../../lib/indicator-sdk/graphic-renderer";
@@ -36,7 +37,7 @@ export function useIndicators(
   chartEpoch=0,
   liveVolumeRef?:React.RefObject<ISeriesApi<"Histogram"> | null>,
 ): void {
-  const indicatorSeriesRef = useRef<Map<string, ISeriesApi<"Line"> | ISeriesApi<"Histogram">>>(
+  const indicatorSeriesRef = useRef<Map<string, ISeriesApi<"Line"> | ISeriesApi<"Histogram"> | ISeriesApi<"Area">>>(
     new Map(),
   );
   const library = useIndicatorLibrary();
@@ -75,16 +76,22 @@ export function useIndicators(
         if(++importedCount>admin.maxActive)continue;
         const definition = library.find(x => `custom:${x.id}` === type);
         const entry = definition && resolveIndicator(definition,overrides);
-        if (entry && entry.kind !== "session-candle" && entry.kind !== "graphics") {
+        if (entry && entry.visible && entry.kind !== "session-candle" && entry.kind !== "graphics") {
           const started=performance.now();
           try {
           const bounded=aggregateCompleted(indCandles.slice(-admin.maxBars),entry.aggregation,sourceSeconds);
-          const data = entry.kind === "expression" ? expressionPoints(bounded,entry.expression) : (entry.kind === "sma" ? sma : ema)(bounded, entry.period);
-          const s = line(type,{ color: entry.color, lineWidth: entry.lineWidth as 1|2|3|4|5, priceScaleId: "right" });
-          s.setData(data.map(p => ({ time: p.time as Time, value: p.value })));
-          indicatorSeriesRef.current.set(type, s);
+          const data = entry.kind === "expression" ? expressionPoints(bounded,entry.expression,parameterValues(entry)) : (entry.kind === "sma" ? sma : ema)(bounded, entry.period);
+          const key=type+":"+entry.plot;
+          const points=data.map(p=>({time:p.time as Time,value:p.value}));
+          if(entry.plot==="histogram")histogram(key,{color:entry.color,priceScaleId:"right"}).setData(points);
+          else if(entry.plot==="area"){
+            used.add(key);let area=indicatorSeriesRef.current.get(key) as ISeriesApi<"Area">|undefined;
+            const options={lineColor:entry.color,topColor:entry.color+"55",bottomColor:entry.color+"00",priceScaleId:"right"};
+            if(!area){area=chart.addAreaSeries(options);indicatorSeriesRef.current.set(key,area);}else area.applyOptions(options);
+            area.setData(points);
+          }else line(key,{color:entry.color,lineWidth:entry.lineWidth as 1|2|3|4|5,priceScaleId:"right"}).setData(points);
           if(admin.diagnostics)reportIndicator(scope,entry.id,performance.now()-started,bounded.length);
-          }catch(e){used.delete(type);if(admin.diagnostics)reportIndicator(scope,entry.id,performance.now()-started,0,e instanceof Error?e.message:String(e));}
+          }catch(e){used.delete(type+":"+entry.plot);if(admin.diagnostics)reportIndicator(scope,entry.id,performance.now()-started,0,e instanceof Error?e.message:String(e));}
         }
         continue;
       }
@@ -258,7 +265,7 @@ export function useIndicators(
     const series = candleSeriesRef.current;
     if (!series) return;
     const allowed=activeIndicators.filter(x=>x.startsWith("custom:")).slice(0,admin.maxActive);
-    const primitives = library.filter(x => allowed.includes(`custom:${x.id}`)).flatMap(x => {const entry=resolveIndicator(x,overrides);return entry.kind==="session-candle"?[new SessionCandlePrimitive(entry,sourceSeconds,admin.maxBars) as import("lightweight-charts").ISeriesPrimitive<Time>]:entry.kind==="graphics"?[new GraphicPrimitive(entry.graphics) as import("lightweight-charts").ISeriesPrimitive<Time>]:[];});
+    const primitives = library.filter(x => allowed.includes(`custom:${x.id}`)).flatMap(x => {const entry=resolveIndicator(x,overrides);return !entry.visible?[]:entry.kind==="session-candle"?[new SessionCandlePrimitive(entry,sourceSeconds,admin.maxBars) as import("lightweight-charts").ISeriesPrimitive<Time>]:entry.kind==="graphics"?[new GraphicPrimitive(entry.graphics) as import("lightweight-charts").ISeriesPrimitive<Time>]:[];});
     const attached:typeof primitives=[];
     for (const primitive of primitives) {try{series.attachPrimitive(primitive);attached.push(primitive);}catch(e){console.warn("Indicator attachment failed",e);}}
     return () => { for (const primitive of attached) { try { series.detachPrimitive(primitive); } catch { /* disposed chart */ } } };
