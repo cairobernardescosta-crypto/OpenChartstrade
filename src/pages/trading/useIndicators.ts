@@ -22,6 +22,8 @@ import {IndicatorWorkerClient} from "../../lib/indicator-sdk/worker-client";
 import {RuntimeGuard} from "../../lib/indicator-sdk/runtime";
 import { useIndicatorLibrary } from "../../lib/indicator-sdk/storage";
 import {GraphicPrimitive} from "../../lib/indicator-sdk/graphic-renderer";
+import {SessionHistoryCache,type SessionHistory} from "../../lib/indicator-sdk/session-history";
+import type {ImportedIndicator} from "../../lib/indicator-sdk/schema";
 import { SessionCandlePrimitive } from "../../lib/indicator-sdk/renderer";
 import {inspectGaps,plotWithGaps} from "../../lib/indicator-sdk/market-gaps";
 import {IndependentHistoryCache,historyPlan,historyMaxAge} from "../../lib/indicator-sdk/independent-history";
@@ -30,6 +32,7 @@ import {api} from "../../services/api.ts";
 import {IndicatorPanes,nativePaneKey,type PaneColors} from "./indicator-panes";
 import { CHART_COLORS } from "./constants.ts";
 
+const sessionHistoryCache=new SessionHistoryCache((symbol,timeframe,limit,range)=>api.getCandles(symbol,timeframe,limit,range));
 const independentHistory=new IndependentHistoryCache((symbol,timeframe,limit,toMs)=>api.getCandles(symbol,timeframe,limit,{toMs}));
 
 export function useIndicators(
@@ -341,15 +344,21 @@ export function useIndicators(
   useEffect(()=>{const chart=chartRef.current;const seriesMap=indicatorSeriesRef.current;const cache=cacheRef.current;const guard=guardRef.current;const signatures=signaturesRef.current;const owners=ownersRef.current;return()=>{if(chart)for(const [key,series] of seriesMap){try{(owners.get(key)??chart).removeSeries(series);}catch{/* disposed */}}owners.clear();seriesMap.clear();paneManagerRef.current?.dispose();paneManagerRef.current=null;cache.clear();guard.reset();signatures.clear();workerRef.current?.stop();workerRef.current=null;};},[chartEpoch,chartRef]);
 
   const replaySlice=isReplaying?chartData:undefined;
-  const [sessionHistory,setSessionHistory]=useState<{key:string;rows:CandleData[];step:number}>({key:"",rows:[],step:60});
-  const needsSessionHistory=library.some(x=>allowedCustom.includes(`custom:${x.id}`)&&resolveIndicator(x,overrides).kind==="session-candle"&&resolveIndicator(x,overrides).historySource==="independent");
-  const sessionKey=JSON.stringify([symbol,isReplaying,replayCutoff]);
-  useEffect(()=>{if(!needsSessionHistory||!symbol)return;let disposed=false;let busy=false;const refresh=async()=>{if(busy)return;busy=true;try{const cutoff=isReplaying?replayCutoff:Math.floor(Date.now()/1000);if(!cutoff)return;const step=60;const rows=await api.getCandles(symbol,"1m",Math.min(admin.maxBars,5000),{toMs:cutoff*1000});if(!disposed)setSessionHistory({key:sessionKey,rows:rows.filter(x=>x.time+step<=cutoff).sort((a,b)=>a.time-b.time),step});}catch{if(!disposed)setSessionHistory({key:sessionKey,rows:[],step:60});}finally{busy=false;}};void refresh();const timer=isReplaying?undefined:setInterval(()=>void refresh(),30000);return()=>{disposed=true;if(timer!==undefined)clearInterval(timer);};},[needsSessionHistory,symbol,isReplaying,replayCutoff,sessionKey,admin.maxBars]);
+  const [sessionHistory,setSessionHistory]=useState<{key:string;entries:Record<string,SessionHistory>}>({key:"",entries:{}});
+  const sessionDefinitions=JSON.stringify(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind==="session-candle"&&x.historySource==="independent"));
+  const sessionKey=JSON.stringify([symbol,isReplaying,replayCutoff,sessionDefinitions,admin.maxBars]);
+  useEffect(()=>{const entries=JSON.parse(sessionDefinitions) as ImportedIndicator[];if(!entries.length||!symbol)return;let disposed=false;let busy=false;
+    const refresh=async()=>{if(busy)return;busy=true;try{const cutoff=isReplaying?replayCutoff:Math.floor(Date.now()/1000);if(!cutoff)return;
+      const results:Record<string,SessionHistory>={};for(const entry of entries){if(disposed)return;try{results[entry.id]=await sessionHistoryCache.get(symbol,entry,cutoff,admin.maxBars);}catch(e){results[entry.id]={rows:[],step:60,error:String(e),coveredThrough:0};}}
+      if(!disposed){setSessionHistory({key:sessionKey,entries:results});for(const entry of entries){const result=results[entry.id]!;reportIndicator(scope,entry.id,0,result.rows.length,result.error);}}
+    }finally{busy=false;}};
+    void refresh();const timer=isReplaying?undefined:setInterval(()=>void refresh(),15000);return()=>{disposed=true;if(timer!==undefined)clearInterval(timer);};
+  },[sessionDefinitions,symbol,isReplaying,replayCutoff,sessionKey,admin.maxBars,scope]);
   useEffect(() => {
     const series = candleSeriesRef.current;
     if (!series) return;
     const allowed=activeIndicators.filter(x=>x.startsWith("custom:")).slice(0,admin.maxActive);
-    const primitives = library.filter(x => allowed.includes(`custom:${x.id}`)).flatMap(x => {const entry=resolveIndicator(x,overrides);if(!entry.visible)return [];const items:import("lightweight-charts").ISeriesPrimitive<Time>[]=[];if(entry.kind==="session-candle")items.push(new SessionCandlePrimitive(entry,sourceSeconds,admin.maxBars,replaySlice,entry.historySource==="independent"?(sessionHistory.key===sessionKey?sessionHistory.rows:[]):undefined,sessionHistory.step));if(entry.graphics.length)items.push(new GraphicPrimitive(entry.graphics,replaySlice));return items;});
+    const primitives = library.filter(x => allowed.includes(`custom:${x.id}`)).flatMap(x => {const entry=resolveIndicator(x,overrides);if(!entry.visible)return [];const items:import("lightweight-charts").ISeriesPrimitive<Time>[]=[];if(entry.kind==="session-candle")items.push(new SessionCandlePrimitive(entry,sourceSeconds,admin.maxBars,replaySlice,entry.historySource==="independent"?(sessionHistory.key===sessionKey?sessionHistory.entries[entry.id]?.rows??[]:[]):undefined,sessionHistory.entries[entry.id]?.step??60));if(entry.graphics.length)items.push(new GraphicPrimitive(entry.graphics,replaySlice));return items;});
     const attached:typeof primitives=[];
     for (const primitive of primitives) {try{series.attachPrimitive(primitive);attached.push(primitive);}catch(e){console.warn("Indicator attachment failed",e);}}
     return () => { for (const primitive of attached) { try { series.detachPrimitive(primitive); } catch { /* disposed chart */ } } };

@@ -69,3 +69,6 @@ Primary preferences retain their existing keys. Secondary preferences are stored
 
 ## M19 market gaps
 Continuous 24/7 is the default, including Hyperliquid HIP-3; underlying oracle market closure is not an excuse to ignore missing exchange bars. An explicit UTC weekday-only aggregation policy supports known weekend closures, not exchange holidays or intraday schedules. Incomplete open intervals are rejected, invalid OHLCV is rejected for aggregation, and custom plots emit whitespace instead of indefinite stale values. Local validation pending.
+
+## M20 independent HTF history
+Each enabled session indicator requests its own bounded session interval, using the finest supported aligned source resolution within the configured bar budget. Requests are paginated in blocks of up to 5,000 candles, deduplicated, and restricted to closed candles at the replay/live cutoff. Missing coverage is reported instead of fabricating OHLC. Live refresh runs every 15 seconds; it is not tick-level streaming. Calendar-period coverage and official exchange schedules receive further work in M21/M22. Local validation pending.

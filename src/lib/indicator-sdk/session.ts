@@ -27,12 +27,10 @@ function parts(ms: number, fmt: Intl.DateTimeFormat) {
 }
 const minutes = (s: string) => Number(s.slice(0,2))*60+Number(s.slice(3));
 
-export function sessionRange(candles: readonly CandleData[], config: ImportedIndicator, sourceSeconds?:number,clockSeconds?:number): SessionRange | null {
-  const last = candles[candles.length-1];
-  if (!last || !Number.isFinite(last.time)) return null;
+export function sessionBounds(config:ImportedIndicator,cursor:number){
+  if(!Number.isFinite(cursor))return null;
   if(config.sessionSchedule==="utc-24h")config={...config,timezone:"UTC",open:"00:00",close:"00:00",days:[0,1,2,3,4,5,6]};
   const fmt = new Intl.DateTimeFormat("en-GB", {timeZone:config.timezone, year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"});
-  const cursor=clockSeconds===undefined?last.time:Math.max(last.time,clockSeconds);
   const now = parts(cursor*1000, fmt);
   const o = minutes(config.open), c = minutes(config.close);
   let day = now.day - (now.minute < o ? 1 : 0);
@@ -49,11 +47,19 @@ export function sessionRange(candles: readonly CandleData[], config: ImportedInd
   const segment=duration?Math.max(0,Math.floor((Math.min(cursor,end-1)-start)/duration)):0;
   const rangeStart=start+segment*duration;
   const rangeEnd=duration?Math.min(end,rangeStart+duration):end;
+  return {start,end,rangeStart,rangeEnd};
+}
+
+export function sessionRange(candles:readonly CandleData[],config:ImportedIndicator,sourceSeconds?:number,clockSeconds?:number,closedOnly=false):SessionRange|null{
+  const last=candles[candles.length-1];if(!last)return null;
+  const cursor=clockSeconds??last.time;
+  const bounds=sessionBounds(config,cursor);if(!bounds)return null;
+  const {start,end,rangeStart,rangeEnd}=bounds;
   if(sourceSeconds!==undefined&&(!Number.isInteger(sourceSeconds)||sourceSeconds<=0||rangeStart%sourceSeconds!==0||rangeEnd%sourceSeconds!==0))return null;
   let expected=rangeStart;
   let out: SessionRange | null = null;
   for (const bar of candles) {
-    if (bar.time < rangeStart || bar.time >= rangeEnd) continue;
+    if (bar.time < rangeStart || bar.time >= rangeEnd || bar.time>cursor || (closedOnly&&sourceSeconds!==undefined&&bar.time+sourceSeconds>cursor)) continue;
     if (![bar.open,bar.high,bar.low,bar.close].every(Number.isFinite)||bar.high<Math.max(bar.open,bar.close)||bar.low>Math.min(bar.open,bar.close)){if(sourceSeconds!==undefined)return null;continue;}
     if(sourceSeconds!==undefined){if(bar.time!==expected)return null;expected+=sourceSeconds;}
     if (!out) out = {start:rangeStart,end:rangeEnd,open:bar.open,high:bar.high,low:bar.low,close:bar.close,highTime:bar.time,lowTime:bar.time};
@@ -63,7 +69,7 @@ export function sessionRange(candles: readonly CandleData[], config: ImportedInd
       out.close=bar.close;
     }
   }
-  if(out&&sourceSeconds!==undefined&&cursor>=rangeEnd&&expected!==rangeEnd)return null;
+  if(out&&sourceSeconds!==undefined&&(cursor>=rangeEnd||closedOnly)&&expected!==Math.min(rangeEnd,Math.floor(cursor/sourceSeconds)*sourceSeconds))return null;
   if(out){out.sessionStart=start;out.sessionEnd=end;out.closed=cursor>=rangeEnd;}
   return out;
 }
