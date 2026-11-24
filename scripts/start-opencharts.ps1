@@ -1,3 +1,7 @@
+param(
+  [string]$ChromeProfile = ""
+)
+
 $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -65,7 +69,12 @@ $chromeCandidates = @(
 $chrome = $chromeCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 
 if ($chrome) {
-  Start-Process -FilePath $chrome -ArgumentList "--app=$url"
+  $chromeArguments = @()
+  if ($ChromeProfile) {
+    $chromeArguments += "--profile-directory=`"$ChromeProfile`""
+  }
+  $chromeArguments += "--app=$url"
+  Start-Process -FilePath $chrome -ArgumentList $chromeArguments
 } else {
   Start-Process $url
 }
