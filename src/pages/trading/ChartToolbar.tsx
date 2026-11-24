@@ -56,6 +56,7 @@ import { ReplayHUD } from "./ReplayHUD.tsx";
 import { getPipDigits } from "./utils.ts";
 
 export interface ChartToolbarProps {
+  previewCandles?:readonly import("../../lib/indicators").CandleData[];
   selectedSymbol: string;
   symbols: Array<{
     id?: string;
@@ -113,6 +114,7 @@ export interface ChartToolbarProps {
 }
 
 export function ChartToolbar({
+  previewCandles,
   selectedSymbol,
   symbols,
   onSymbolChange,
@@ -412,7 +414,7 @@ export function ChartToolbar({
 
           {showIndicatorMenu && (
             <div className="absolute top-full left-0 z-50 mt-1 w-80 max-h-[75vh] overflow-y-auto bg-card border border-border rounded-lg shadow-xl p-2 space-y-0.5">
-              <IndicatorLibraryMenu key={indicatorScope} scope={indicatorScope} active={activeIndicators} toggle={onToggleIndicator} />
+              <IndicatorLibraryMenu key={indicatorScope} scope={indicatorScope} active={activeIndicators} toggle={onToggleIndicator} symbol={selectedSymbol} timeframe={timeframe} replay={isReplaying} previewCandles={previewCandles} />
               {INDICATOR_REGISTRY.map((ind) => (
                 <button
                   key={ind.type}

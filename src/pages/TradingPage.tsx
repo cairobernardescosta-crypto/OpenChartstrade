@@ -278,6 +278,7 @@ export function TradingPage() {
 
       {/* ── Top Toolbar ──────────────────────────────────── */}
       <ChartToolbar
+        previewCandles={activeChart==="primary"?(replayCandles??candles??[]):secondaryCandles}
         selectedSymbol={activeChart === "primary" ? selectedSymbol : secondarySymbol}
         symbols={symbols}
         onSymbolChange={activeChart === "primary" ? setSelectedSymbol : setSecondarySymbol}

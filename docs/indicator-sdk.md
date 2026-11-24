@@ -78,3 +78,6 @@ Weekly HTF uses Monday boundaries and monthly HTF uses actual civil calendar mon
 
 ## M22 automatic market schedules
 The adapter contract optionally supplies a recurring session for a symbol at a given timestamp. Hyperliquid declares its continuous UTC trading convention for recognized markets, not the underlying oracle's exchange calendar. Automatic mode validates provider metadata, refreshes every minute in live mode, uses replay timestamps, and falls back to stored manual settings when metadata is unavailable. The provider contract currently represents recurring hours only; exchange holidays, exceptional closures and intraday maintenance intervals are not supplied by Hyperliquid and are not inferred. Local validation pending.
+
+## M23 market-data preview
+The indicator editor uses the selected chart's actual closed bars, or independent historical data according to the indicator configuration. Replay is bounded to the replay timestamp. Session previews use the session calculation and optional provider schedule. Illustrative candles require explicit selection and are labeled. Graphics-only commands retain a summary and require activation for full rendering. Local tests and visual verification pending.

@@ -7,11 +7,11 @@ import {IndicatorPreview} from "./IndicatorPreview";
 import {useIndicatorAdmin,saveIndicatorAdmin} from "../../../lib/indicator-sdk/admin";
 import {usePersistenceError} from "../../../lib/indicator-sdk/database";
 import { useOverrides, saveOverride, resetOverride, clearOverrides, resolveIndicator, exportOverrides, restoreOverrides, type ChartScope } from "../../../lib/indicator-sdk/instances";
-import type { IndicatorType } from "../../../lib/indicators";
+import type { CandleData,IndicatorType } from "../../../lib/indicators";
 import { HTF_EXAMPLE, parseIndicator, indicatorSchema, type ImportedIndicator } from "../../../lib/indicator-sdk/schema";
 import { useIndicatorLibrary, installIndicator, updateIndicator, removeIndicator, duplicateIndicator, versions, restoreVersion, setIndicatorFavorite, exportLibrary, restoreLibrary, getLibraryError, recoverLibraryMirror } from "../../../lib/indicator-sdk/storage";
 
-export function IndicatorLibraryMenu({active,toggle,scope="primary"}:{active: IndicatorType[];toggle:(type:IndicatorType)=>void;scope?:ChartScope}) {
+export function IndicatorLibraryMenu({active,toggle,scope="primary",symbol="",timeframe="1m",replay=false,previewCandles}:{active: IndicatorType[];toggle:(type:IndicatorType)=>void;scope?:ChartScope;symbol?:string;timeframe?:string;replay?:boolean;previewCandles?:readonly CandleData[]}) {
   const queryClient=useQueryClient();
   const library=useIndicatorLibrary();
   const admin=useIndicatorAdmin();
@@ -51,7 +51,7 @@ export function IndicatorLibraryMenu({active,toggle,scope="primary"}:{active: In
     {getLibraryError() && <p role="alert" className="text-xs">Stored library could not be loaded.</p>}
     {draft && <div className="border border-border rounded p-2 text-xs space-y-2">
       <div className="font-semibold">{draft.name} · {draft.version}</div>
-      <IndicatorPreview draft={draft}/><p className="text-muted-foreground">Illustrative preview · sample data</p>
+      <IndicatorPreview draft={draft} symbol={symbol} timeframe={timeframe} replay={replay} chartCandles={previewCandles}/>
       <div>{draft.kind} · {localEdit?scope+" chart":"library definition"}</div>{!localEdit&&<><label className="block">Version <input className="bg-background border border-border" value={draft.version} onChange={e=>setDraft({...draft,version:e.target.value})}/></label><label className="block">Author <input className="bg-background border border-border" value={draft.author} onChange={e=>setDraft({...draft,author:e.target.value})}/></label><label className="block">Description <textarea className="w-full bg-background border border-border" value={draft.description} onChange={e=>setDraft({...draft,description:e.target.value})}/></label></>}<label>Name <input className="w-full bg-background border border-border" value={draft.name} onChange={e=>setDraft({...draft,name:e.target.value})}/></label>
       {draft.kind==="expression" && <label>Formula (OHLCV arithmetic)<input className="w-full bg-background border border-border" value={draft.expression} onChange={e=>setDraft({...draft,expression:e.target.value})}/></label>}
       {draft.kind==="session-candle" ? <><label className="block">Opening <input type="time" className="bg-background" value={draft.open} onChange={e=>setDraft({...draft,open:e.target.value})}/></label><label className="block">Closing <input type="time" className="bg-background" value={draft.close} onChange={e=>setDraft({...draft,close:e.target.value})}/></label><label className="block">Time zone <input className="w-full bg-background border border-border" value={draft.timezone} onChange={e=>setDraft({...draft,timezone:e.target.value})}/></label></>:<label>Period <input type="number" min={1} max={5000} className="w-20 bg-background" value={draft.period} onChange={e=>setDraft({...draft,period:Number(e.target.value)})}/></label>}

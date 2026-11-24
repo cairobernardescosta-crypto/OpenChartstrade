@@ -1,0 +1,2 @@
+import {describe,it,expect} from "vitest";import {normalizePreviewCandles,previewStep} from "../lib/indicator-sdk/preview-data";
+describe("market preview",()=>{it("sorts, deduplicates and excludes unclosed bars",()=>{const bar=(time:number)=>({time,open:1,high:2,low:1,close:2});expect(normalizePreviewCandles([bar(120),bar(60),bar(0),bar(60)],60,120,100).map(b=>b.time)).toEqual([0,60]);});it("recognizes chart resolution",()=>expect(previewStep("4h")).toBe(14400));});
