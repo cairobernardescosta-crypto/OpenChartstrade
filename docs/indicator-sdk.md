@@ -15,3 +15,6 @@ Mathematical series are reused while active and refreshed from candle/volume ser
 
 ## Template and diagnostic increment
 Templates now include active imported definitions and chart-specific overrides. Loading validates definitions, installs only missing IDs, retains existing installed versions, and filters unknown indicator IDs. Older templates remain supported. Scope changes remount the template menu; the existing global template selection/autosave preferences remain shared. Diagnostic timings measure mathematical calculation and series update wall time; not CPU or memory. Calculation errors are isolated per imported mathematical indicator and its series is removed for that update. Source view displays the normalized declarative definition, not an original source archive. Local verification pending.
+
+## Primary persistence
+IndexedDB records are read on startup, validated and migrated from the compatibility cache only if absent. LocalStorage remains a best-effort recovery cache. In-session revisions prevent delayed hydration from overwriting a newer local edit. Library, history, chart overrides and admin settings are persisted. Multi-tab conflicts, crash durability and migration require browser tests before release.
