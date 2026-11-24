@@ -1,8 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { parseIndicator, HTF_EXAMPLE } from "../lib/indicator-sdk/schema";
+import htfCandleRangeSource from "../../examples/indicators/HTFCandleRange.ts?raw";
 import { sessionRange } from "../lib/indicator-sdk/session";
 describe("declarative indicator SDK", () => {
   it("parses the example",()=>expect(parseIndicator("export default "+HTF_EXAMPLE+";").kind).toBe("session-candle"));
+  it("imports the distributed HTF Candle Range definition",()=>{
+    const indicator=parseIndicator(htfCandleRangeSource);
+    expect(indicator).toMatchObject({id:"htf-candle-range",kind:"session-candle",offset:30,width:2});
+  });
   it("rejects executable source",()=>expect(()=>parseIndicator("export default (() => fetch('/'))();")).toThrow());
   it("rejects invalid hours",()=>expect(()=>parseIndicator('export default {"sdk":1,"id":"test","name":"Test","version":"1.0.0","kind":"session-candle","open":"25:00"}')).toThrow());
   it("aggregates overnight sessions and excludes close boundary",()=>{
