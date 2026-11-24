@@ -92,3 +92,6 @@ O [roteiro de validação local](indicator-validation.md) reúne os testes pende
 
 ## L11 identificação da fonte
 A biblioteca indica o provedor ativo e a fonte configurada por indicador; a prévia identifica o caminho efetivamente consultado, ativo, período, quantidade e corte temporal. Demonstração e amostras sintéticas não recebem rótulo de feed ao vivo. Caches de histórico independente e de sessão são recriados ao trocar o adaptador, e resultados anteriores são rejeitados por identidade. A identificação do provedor não certifica disponibilidade ou atualidade de suas cotações. Validação local pendente.
+
+## L12 padronização de campos
+Estilos compartilhados entre biblioteca, prévia, editor gráfico, administração e backups, usando os tokens de tema existentes. Controles de texto, seleção, arquivo, cor, checkbox e código recebem padrão de largura, contraste, foco e desabilitação. Campos HTF exibem unidades legíveis e limites numéricos coerentes com o esquema. Os identificadores persistidos e ações existentes são preservados. Validação de layout, teclado, temas e compilação pendente no ambiente local.
