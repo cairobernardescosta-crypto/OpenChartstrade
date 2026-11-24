@@ -17,9 +17,8 @@ import { toIndicatorCandles } from "./utils.ts";
 import { useOverrides, resolveIndicator, type ChartScope } from "../../lib/indicator-sdk/instances";
 import {useIndicatorAdmin} from "../../lib/indicator-sdk/admin";
 import {reportIndicator} from "../../lib/indicator-sdk/diagnostics";
-import {aggregateCompleted} from "../../lib/indicator-sdk/aggregate";
-import {parameterValues} from "../../lib/indicator-sdk/schema";
-import {RuntimeGuard,runBoundedExpression} from "../../lib/indicator-sdk/runtime";
+import {AggregationCache,CalculationCache} from "../../lib/indicator-sdk/calculation-cache";
+import {RuntimeGuard} from "../../lib/indicator-sdk/runtime";
 import { useIndicatorLibrary } from "../../lib/indicator-sdk/storage";
 import {GraphicPrimitive} from "../../lib/indicator-sdk/graphic-renderer";
 import { SessionCandlePrimitive } from "../../lib/indicator-sdk/renderer";
@@ -40,6 +39,10 @@ export function useIndicators(
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<"Line"> | ISeriesApi<"Histogram"> | ISeriesApi<"Area">>>(
     new Map(),
   );
+  const cacheRef=useRef(new CalculationCache());
+  const aggregationRef=useRef(new AggregationCache());
+  const guardRef=useRef(new RuntimeGuard());
+  const signaturesRef=useRef(new Map<string,string>());
   const library = useIndicatorLibrary();
   const admin = useIndicatorAdmin();
   const overrides = useOverrides(scope);
@@ -51,12 +54,18 @@ export function useIndicators(
     const chart = chartRef.current;
     const source=candleSeriesRef.current;
     const used=new Set<string>();
-    const guard=new RuntimeGuard();
+    const guard=guardRef.current;
+    const cache=cacheRef.current;
+    const aggregation=aggregationRef.current;
     const sync=()=>{
     used.clear();
     const live=source.data().flatMap(c=>typeof c.time==="number"&&"open" in c?[c as CandlestickData<Time>]:[]);
     const vols=liveVolumeRef?.current?.data().flatMap(v=>"value" in v?[{time:v.time,value:v.value}]:[])??volumeData;
     const indCandles = toIndicatorCandles(live.length?live:chartData, vols);
+    aggregation.prepare(indCandles.slice(-admin.maxBars),sourceSeconds);
+    const activeCustom=new Set(activeIndicators.filter(x=>x.startsWith("custom:")).map(x=>x.slice(7)));
+    cache.prune(activeCustom);
+    for(const id of signaturesRef.current.keys())if(!activeCustom.has(id)){signaturesRef.current.delete(id);guard.success("custom:"+id);}
 
     function line(key:string,options:Parameters<IChartApi["addLineSeries"]>[0]){
       used.add(key);
@@ -78,14 +87,19 @@ export function useIndicators(
         const definition = library.find(x => `custom:${x.id}` === type);
         const entry = definition && resolveIndicator(definition,overrides);
         if (entry && entry.visible && entry.kind !== "session-candle" && entry.kind !== "graphics") {
+          const signature=JSON.stringify(entry);
+          const settingsChanged=signaturesRef.current.get(entry.id)!==signature;
+          if(settingsChanged){guard.success(type);signaturesRef.current.set(entry.id,signature);}
           if(guard.blocked(type))continue;
           const started=performance.now();
           try {
-          const bounded=aggregateCompleted(indCandles.slice(-admin.maxBars),entry.aggregation,sourceSeconds);
-          const data = entry.kind === "expression" ? runBoundedExpression(bounded,entry.expression,parameterValues(entry)) : (entry.kind === "sma" ? sma : ema)(bounded, entry.period);
+          const bounded=aggregation.get(entry.aggregation);
+          const result=cache.calculate(entry,bounded);
+          const data=result.points;
           if(performance.now()-started>100)throw new Error("Indicator execution budget exceeded");
           const key=type+":"+entry.plot;
           const scaleId=entry.scale==="independent"?"indicator-"+entry.id:"right";
+          if(result.cached&&!settingsChanged&&indicatorSeriesRef.current.has(key)){used.add(key);guard.success(type);continue;}
           const points=data.map(p=>({time:p.time as Time,value:p.value}));
           if(entry.plot==="histogram")histogram(key,{color:entry.color,priceScaleId:scaleId}).setData(points);
           else if(entry.plot==="area"){
@@ -95,7 +109,7 @@ export function useIndicators(
             area.setData(points);
           }else line(key,{color:entry.color,lineWidth:entry.lineWidth as 1|2|3|4|5,priceScaleId:scaleId}).setData(points);
           guard.success(type);
-          if(admin.diagnostics)reportIndicator(scope,entry.id,performance.now()-started,bounded.length);
+          if(admin.diagnostics)reportIndicator(scope,entry.id,performance.now()-started,bounded.length,"",result.incremental?"incremental":result.cached?"cache":"full");
           }catch(e){used.delete(type+":"+entry.plot);const failures=guard.fail(type);reportIndicator(scope,entry.id,performance.now()-started,0,(e instanceof Error?e.message:String(e))+(guard.blocked(type)?" — paused after "+failures+" failures":""));}
         }
         continue;
@@ -264,7 +278,7 @@ export function useIndicators(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIndicators, chartData, isDark, library, volumeData, overrides, admin, sourceSeconds, chartEpoch, liveVolumeRef, scope]);
 
-  useEffect(()=>{const chart=chartRef.current;const seriesMap=indicatorSeriesRef.current;return()=>{if(chart)for(const series of seriesMap.values()){try{chart.removeSeries(series);}catch{/* disposed */}}seriesMap.clear();};},[chartEpoch,chartRef]);
+  useEffect(()=>{const chart=chartRef.current;const seriesMap=indicatorSeriesRef.current;const cache=cacheRef.current;const guard=guardRef.current;const signatures=signaturesRef.current;return()=>{if(chart)for(const series of seriesMap.values()){try{chart.removeSeries(series);}catch{/* disposed */}}seriesMap.clear();cache.clear();guard.reset();signatures.clear();};},[chartEpoch,chartRef]);
 
   useEffect(() => {
     const series = candleSeriesRef.current;

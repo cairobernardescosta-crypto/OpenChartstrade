@@ -33,3 +33,6 @@ Graphics support optional stable IDs, individual updates/removal, visibility, th
 
 ## Manager phase
 A unified JSON backup contains definitions, history, both chart scopes and administrative settings. All sections are validated before restore; writes remain separate queued IndexedDB transactions, not atomic across stores. The manager supports original definition editing and selection of up to five saved revisions. Startup hydration guards prevent library and override changes during initial reads. Existing separate backup controls remain available. Browser migration and restore tests remain pending.
+
+## Performance phase
+Per-chart bounded calculation cache (12 entries, 100,000 combined input/output points), exact OHLCV prefix comparison, incremental expression suffix calculations, shared aggregation, and unchanged-output rendering skip. SMA/EMA recompute when input changes to preserve rolling-window semantics. Runtime failure guards persist across ordinary React updates and reset on definition changes or deactivation. Diagnostics record ten recent errors per indicator and flag slow calculations. No measured benchmark or local test result is claimed.

@@ -1,0 +1,6 @@
+import {describe,it,expect} from "vitest";
+import {CalculationCache,AggregationCache} from "../lib/indicator-sdk/calculation-cache";
+import {indicatorSchema} from "../lib/indicator-sdk/schema";
+const config=indicatorSchema.parse({sdk:1,id:"cache",name:"Cache",version:"1.0.0",kind:"expression",expression:"close*2"});
+const bars=[{time:60,open:1,high:3,low:1,close:2},{time:120,open:2,high:4,low:1,close:3}];
+describe("bounded calculation cache",()=>{it("reuses identical input",()=>{const c=new CalculationCache();c.calculate(config,bars);expect(c.calculate(config,bars).cached).toBe(true);});it("updates only changed suffix",()=>{const c=new CalculationCache();c.calculate(config,bars);const next=[bars[0]!,{...bars[1]!,close:4}];expect(c.calculate(config,next)).toMatchObject({incremental:true,points:[{time:60,value:4},{time:120,value:8}]});});it("invalidates historical correction and formula change",()=>{const c=new CalculationCache();c.calculate(config,bars);expect(c.calculate(config,[{...bars[0]!,close:1},bars[1]!]).points[0]?.value).toBe(2);expect(c.calculate({...config,expression:"close"},bars).points[0]?.value).toBe(2);});it("shares aggregation for unchanged input",()=>{const c=new AggregationCache();c.prepare(bars,60);const a=c.get(0);c.prepare(bars,60);expect(c.get(0)).toBe(a);c.prepare(bars.slice(0,1),60);expect(c.get(0)).not.toBe(a);});});
