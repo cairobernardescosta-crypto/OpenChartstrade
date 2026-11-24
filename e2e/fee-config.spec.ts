@@ -71,6 +71,15 @@ test.describe("remote fee config (kill switch) and fee re-approval", () => {
     expect(hl.fake.actionsOfType("approveBuilderFee")).toHaveLength(2);
     await setup.getByRole("button", { name: "Close", exact: true }).last().click();
 
+    // The rejected order may leave an error toast over the ticket. Dismiss only
+    // that known approval notice before the intentional retry.
+    const approvalNotice = page
+      .getByRole("alert")
+      .filter({ hasText: /trading fee hasn't been approved yet/i });
+    if (await approvalNotice.isVisible().catch(() => false)) {
+      await approvalNotice.getByRole("button", { name: "Dismiss notification" }).click();
+    }
+
     await submitOrder(page, "Buy");
     await expect.poll(() => hl.fake.position("xyz:EUR")?.szi).toBe(10);
   });
