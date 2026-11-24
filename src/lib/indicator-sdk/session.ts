@@ -1,5 +1,6 @@
 import type { CandleData } from "../indicators";
 import type { ImportedIndicator } from "./schema";
+import {missingOpenBars,validMarketBar} from "./market-gaps";
 
 export interface SessionRange {
   start: number; end: number; open: number; high: number; low: number; close: number;
@@ -34,13 +35,11 @@ export function sessionBounds(config:ImportedIndicator,cursor:number){
   const now = parts(cursor*1000, fmt);
   const o = minutes(config.open), c = minutes(config.close);
   let day = now.day - (now.minute < o ? 1 : 0);
+  const calendar=config.sessionMinutes==="week"||config.sessionMinutes==="month";
   // Keep the last eligible session frozen through non-trading days.
-  let eligible=false;
-  for(let i=0;i<7;i++,day--){if(config.days.includes(new Date(day*86400000).getUTCDay())){eligible=true;break;}}
-  if(!eligible)return null;
+  if(!calendar){let eligible=false;for(let i=0;i<7;i++,day--){if(config.days.includes(new Date(day*86400000).getUTCDay())){eligible=true;break;}}if(!eligible)return null;}
   let endDay=day+(c<=o?1:0);
   if(config.sessionMinutes==="week"){const weekday=new Date(day*86400000).getUTCDay();day-=(weekday+6)%7;endDay=day+7;}else if(config.sessionMinutes==="month"){const date=new Date(day*86400000);day=Date.UTC(date.getUTCFullYear(),date.getUTCMonth(),1)/86400000;endDay=Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+1,1)/86400000;}
-  const calendar=config.sessionMinutes==="week"||config.sessionMinutes==="month";
   const start = civilTime(day,o,fmt), end = civilTime(endDay,calendar?o:c,fmt);
   if (start === null || end === null || end<=start) return null;
   const duration=config.sessionMinutes==="session"||calendar?0:Number(config.sessionMinutes)*60;
@@ -56,12 +55,14 @@ export function sessionRange(candles:readonly CandleData[],config:ImportedIndica
   const bounds=sessionBounds(config,cursor);if(!bounds)return null;
   const {start,end,rangeStart,rangeEnd}=bounds;
   if(sourceSeconds!==undefined&&(!Number.isInteger(sourceSeconds)||sourceSeconds<=0||rangeStart%sourceSeconds!==0||rangeEnd%sourceSeconds!==0))return null;
+  const calendar=config.sessionMinutes==="week"||config.sessionMinutes==="month";
+  const policy=config.sessionSchedule==="utc-24h"?"continuous":config.gapPolicy;
   let expected=rangeStart;
   let out: SessionRange | null = null;
   for (const bar of candles) {
     if (bar.time < rangeStart || bar.time >= rangeEnd || bar.time>cursor || (closedOnly&&sourceSeconds!==undefined&&bar.time+sourceSeconds>cursor)) continue;
-    if (![bar.open,bar.high,bar.low,bar.close].every(Number.isFinite)||bar.high<Math.max(bar.open,bar.close)||bar.low>Math.min(bar.open,bar.close)){if(sourceSeconds!==undefined)return null;continue;}
-    if(sourceSeconds!==undefined){if(bar.time!==expected)return null;expected+=sourceSeconds;}
+    if (!validMarketBar(bar)){if(sourceSeconds!==undefined)return null;continue;}
+    if(sourceSeconds!==undefined){if(bar.time!==expected&&(!calendar||missingOpenBars(expected,bar.time,sourceSeconds,policy)!==0))return null;expected=bar.time+sourceSeconds;}
     if (!out) out = {start:rangeStart,end:rangeEnd,open:bar.open,high:bar.high,low:bar.low,close:bar.close,highTime:bar.time,lowTime:bar.time};
     else {
       if (bar.high>out.high) {out.high=bar.high;out.highTime=bar.time;}
@@ -69,7 +70,7 @@ export function sessionRange(candles:readonly CandleData[],config:ImportedIndica
       out.close=bar.close;
     }
   }
-  if(out&&sourceSeconds!==undefined&&(cursor>=rangeEnd||closedOnly)&&expected!==Math.min(rangeEnd,Math.floor(cursor/sourceSeconds)*sourceSeconds))return null;
+  if(out&&sourceSeconds!==undefined&&(cursor>=rangeEnd||closedOnly)){const through=Math.min(rangeEnd,Math.floor(cursor/sourceSeconds)*sourceSeconds);if(expected!==through&&(!calendar||missingOpenBars(expected,through,sourceSeconds,policy)!==0))return null;}
   if(out){out.sessionStart=start;out.sessionEnd=end;out.closed=cursor>=rangeEnd;}
   return out;
 }

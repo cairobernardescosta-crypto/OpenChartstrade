@@ -49,7 +49,7 @@ export class SessionCandlePrimitive extends PluginBase {
       ctx.strokeStyle=r.close>=r.open?this.config.color:this.config.downColor;ctx.fillStyle=ctx.strokeStyle;
       if(showProjected&&this.config.showCandle&&this.config.showWicks)line(x,yH,x,yL);
       if(showProjected&&this.config.showCandle)ctx.fillRect(x-this.config.width/2,Math.min(yO,yC),this.config.width,Math.max(1,Math.abs(yO-yC)));
-      if(showProjected&&this.config.showLabels){const label=sessionPeriodLabel(this.config);ctx.font="11px sans-serif";ctx.textAlign="center";ctx.fillText(label,x,yH-7);ctx.fillText(label,x,yL+14);}ctx.restore();
+      if(showProjected&&this.config.showLabels){const label=sessionPeriodLabel(this.config)+(r.closed?"":" · partial");ctx.font="11px sans-serif";ctx.textAlign="center";ctx.fillText(label,x,yH-7);ctx.fillText(label,x,yL+14);}ctx.restore();
     });
   }
 }

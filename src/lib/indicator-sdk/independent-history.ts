@@ -1,6 +1,6 @@
 import type {CandleData,IndicatorPoint} from "../indicators";
 import {validMarketBar,type MarketGapPolicy} from "./market-gaps";
-import {aggregateCompleted} from "./aggregate";
+import {aggregateCompleted,calendarPeriodEnd} from "./aggregate";
 export const HISTORY_LIMIT=5000;
 export function historyPlan(minutes:number):{timeframe:string;seconds:number;aggregate:number}|null{
  switch(minutes){
@@ -20,7 +20,7 @@ export function completedHistory(rows:readonly CandleData[],minutes:number,cutof
  for(const c of rows)if(validMarketBar(c)&&c.time+plan.seconds<=cutoff)unique.set(c.time,{...c});
  const bars=[...unique.values()].sort((a,b)=>a.time-b.time).slice(-HISTORY_LIMIT);
  if(!plan.aggregate)return bars.map(c=>({...c,time:c.time+plan.seconds}));
- return aggregateCompleted(bars,plan.aggregate,plan.seconds,true,policy).map(c=>({...c,time:c.time+plan.seconds}));
+ return aggregateCompleted(bars,plan.aggregate,plan.seconds,true,policy,cutoff).map(c=>({...c,time:calendarPeriodEnd(c.time,minutes,plan.seconds)}));
 }
 export function alignHistoryPoints(points:readonly IndicatorPoint[],chart:readonly CandleData[],maxAge=Infinity):IndicatorPoint[]{
  const result:IndicatorPoint[]=[];let i=0;let current:IndicatorPoint|undefined;
@@ -46,3 +46,4 @@ export class IndependentHistoryCache{
 }
 
 export function historyMaxAge(minutes:number){return minutes===43200?31*86400:minutes*60;}
+export function historyPointExpiry(time:number,minutes:number){if(minutes===43200){const d=new Date(time*1000);return Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,1)/1000;}return time+minutes*60;}
