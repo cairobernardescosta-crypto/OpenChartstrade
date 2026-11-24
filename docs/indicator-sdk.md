@@ -9,3 +9,6 @@ IndexedDB mirrors library, revision history and per-chart overrides asynchronous
 
 ## Declarative graphics
 The graphics kind accepts up to 100 validated drawing commands: line, horizontal, vertical, box, text, arrow and table. Coordinates use price and logical bar offsets from the latest bar. These are static declarative graphics, not a general programmable drawing runtime. Graphics preview reports validated command count; actual chart rendering requires local validation.
+
+## Live update and aggregation increment
+Mathematical series are reused while active and refreshed from candle/volume series subscriptions, coalesced to 200 ms. Calculations remain full-window, not O(1). Imported mathematical kinds can aggregate complete UTC-aligned periods from loaded lower-resolution candles; incomplete buckets and gaps are excluded and output is timestamped at the last contributing bar. No independent market-data requests are made. HTF session drawing rejects incomplete starting history and incompatible source boundaries; future coordinates remain approximate and visible right margin is still needed. Local typecheck and browser testing are required.

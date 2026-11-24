@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { compileExpression } from "./expression";
 import {graphicSchema} from "./graphics";
+import {aggregationMinutes} from "./aggregate";
 
 const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 const id = z.string().regex(/^[a-z][a-z0-9-]{0,63}$/);
@@ -13,6 +14,7 @@ export const indicatorSchema = z.object({
   kind: z.enum(["sma", "ema", "session-candle", "expression", "graphics"]),
   graphics:z.array(graphicSchema).max(100).default([]),
   expression: z.string().max(512).default("close"),
+  aggregation:z.number().refine(v=>aggregationMinutes.some(m=>m===v),"Unsupported aggregation").default(0),
   favorite: z.boolean().default(false),
   author: z.string().max(80).default(""),
   opacity: z.number().min(0.1).max(1).default(1),
