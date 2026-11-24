@@ -22,6 +22,9 @@ export class CalculationCache{
     const cutoff=bars[prefix-1]!.time;
     output=[...old.output.filter(p=>p.time<=cutoff),...tail];incremental=true;
    }else output=runBoundedExpression(bars,config.expression,parameterValues(config));
+  }else if(old&&prefix>=config.period&&old.signature===signature){
+   output=old.output.filter(p=>p.time<=bars[prefix-1]!.time);const period=config.period;let value=output[output.length-1]!.value;let sum=bars.slice(prefix-period,prefix).reduce((n,b)=>n+b.close,0);const k=2/(period+1);
+   for(let i=prefix;i<bars.length;i++){if(config.kind==="sma"){sum+=bars[i]!.close-bars[i-period]!.close;value=sum/period;}else value=bars[i]!.close*k+value*(1-k);output.push({time:bars[i]!.time,value});}incremental=true;
   }else output=(config.kind==="sma"?sma:ema)(bars,config.period);
   this.entries.delete(config.id);
   if(bars.length+output.length<=this.maxPoints)this.entries.set(config.id,{signature,input:bars.map(b=>({...b})),output});

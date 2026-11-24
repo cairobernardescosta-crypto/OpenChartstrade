@@ -18,6 +18,7 @@ import { useOverrides, resolveIndicator, type ChartScope } from "../../lib/indic
 import {useIndicatorAdmin} from "../../lib/indicator-sdk/admin";
 import {reportIndicator} from "../../lib/indicator-sdk/diagnostics";
 import {AggregationCache,CalculationCache} from "../../lib/indicator-sdk/calculation-cache";
+import {IndicatorWorkerClient} from "../../lib/indicator-sdk/worker-client";
 import {RuntimeGuard} from "../../lib/indicator-sdk/runtime";
 import { useIndicatorLibrary } from "../../lib/indicator-sdk/storage";
 import {GraphicPrimitive} from "../../lib/indicator-sdk/graphic-renderer";
@@ -47,6 +48,7 @@ export function useIndicators(
     new Map(),
   );
   const cacheRef=useRef(new CalculationCache());
+  const workerRef=useRef<IndicatorWorkerClient|null>(null);
   const aggregationRef=useRef(new AggregationCache());
   const guardRef=useRef(new RuntimeGuard());
   const signaturesRef=useRef(new Map<string,string>());
@@ -76,7 +78,10 @@ export function useIndicators(
     const guard=guardRef.current;
     const cache=cacheRef.current;
     const aggregation=aggregationRef.current;
-    const sync=()=>{
+    let disposed=false;let busy=false;let rerun=false;
+    const sync=async()=>{
+    if(disposed)return;if(busy){rerun=true;return;}busy=true;
+    try{
     used.clear();
     const live=source.data().flatMap(c=>typeof c.time==="number"&&"open" in c?[c as CandlestickData<Time>]:[]);
     const vols=liveVolumeRef?.current?.data().flatMap(v=>"value" in v?[{time:v.time,value:v.value}]:[])??volumeData;
@@ -116,9 +121,12 @@ export function useIndicators(
           const bounded=external?(history.key===historyKey?history.rows[entry.aggregation]??[]:[]).slice(-admin.maxBars):aggregation.get(entry.aggregation);
           if(external&&!periods.includes(entry.aggregation)){reportIndicator(scope,entry.id,0,0,"Independent period limit reached (6 per chart)");continue;}
           if(external&&(!bounded.length||history.errors?.[entry.aggregation])){reportIndicator(scope,entry.id,0,0,history.key!==historyKey?"Loading market history":history.errors?.[entry.aggregation]??"No completed market history");continue;}
-          const result=cache.calculate(entry,bounded);
+          const worker=typeof Worker!=="undefined"?(workerRef.current??=new IndicatorWorkerClient()):null;
+          const reply=worker?await worker.calculate(entry,bounded):null;
+          if(disposed)return;
+          const result=reply?.result??cache.calculate(entry,bounded);
           const data=external?alignHistoryPoints(result.points,indCandles,historyMaxAge(entry.aggregation)):entry.aggregation!==0?alignHistoryPoints(result.points.map(p=>({...p,time:p.time+sourceSeconds})),indCandles):result.points;
-          if(performance.now()-started>100)throw new Error("Indicator execution budget exceeded");
+          if(!reply&&performance.now()-started>100)throw new Error("Indicator execution budget exceeded");
           const key=type+":"+entry.plot;
           const scaleId=entry.scale==="independent"?"indicator-"+entry.id:"right";
           if(!external&&entry.aggregation===0&&result.cached&&!settingsChanged&&indicatorSeriesRef.current.has(key)){used.add(key);guard.success(type);continue;}
@@ -131,8 +139,8 @@ export function useIndicators(
             area.setData(points);
           }else line(key,{color:entry.color,lineWidth:entry.lineWidth as 1|2|3|4|5,priceScaleId:scaleId}).setData(points);
           guard.success(type);
-          if(admin.diagnostics)reportIndicator(scope,entry.id,performance.now()-started,bounded.length,"",result.incremental?"incremental":result.cached?"cache":"full");
-          }catch(e){used.delete(type+":"+entry.plot);const failures=guard.fail(type);reportIndicator(scope,entry.id,performance.now()-started,0,(e instanceof Error?e.message:String(e))+(guard.blocked(type)?" — paused after "+failures+" failures":""));}
+          if(admin.diagnostics)reportIndicator(scope,entry.id,reply?.ms??performance.now()-started,bounded.length,"",result.incremental?"incremental":result.cached?"cache":"full");
+          }catch(e){if(disposed)return;used.delete(type+":"+entry.plot);const failures=guard.fail(type);reportIndicator(scope,entry.id,performance.now()-started,0,(e instanceof Error?e.message:String(e))+(guard.blocked(type)?" — paused after "+failures+" failures":""));}
         }
         continue;
       }
@@ -290,17 +298,18 @@ export function useIndicators(
       }
     }
     for(const [key,series] of indicatorSeriesRef.current){if(!used.has(key)){try{chart.removeSeries(series);}catch{/* disposed */}indicatorSeriesRef.current.delete(key);}}
+    }finally{busy=false;if(rerun&&!disposed){rerun=false;void sync();}}
     };
     let timer:ReturnType<typeof setTimeout>|undefined;
     const schedule=()=>{if(timer!==undefined)return;timer=setTimeout(()=>{timer=undefined;sync();},200);};
     sync();source.subscribeDataChanged(schedule);liveVolumeRef?.current?.subscribeDataChanged(schedule);
     const volume=liveVolumeRef?.current;
-    return()=>{source.unsubscribeDataChanged(schedule);volume?.unsubscribeDataChanged(schedule);if(timer!==undefined)clearTimeout(timer);};
+    return()=>{disposed=true;source.unsubscribeDataChanged(schedule);volume?.unsubscribeDataChanged(schedule);if(timer!==undefined)clearTimeout(timer);};
     // chartRef/candleSeriesRef are stable refs; colors derived from isDark dep.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIndicators, chartData, isDark, library, volumeData, overrides, admin, sourceSeconds, chartEpoch, liveVolumeRef, scope, isReplaying, history, historyKey, symbol]);
 
-  useEffect(()=>{const chart=chartRef.current;const seriesMap=indicatorSeriesRef.current;const cache=cacheRef.current;const guard=guardRef.current;const signatures=signaturesRef.current;return()=>{if(chart)for(const series of seriesMap.values()){try{chart.removeSeries(series);}catch{/* disposed */}}seriesMap.clear();cache.clear();guard.reset();signatures.clear();};},[chartEpoch,chartRef]);
+  useEffect(()=>{const chart=chartRef.current;const seriesMap=indicatorSeriesRef.current;const cache=cacheRef.current;const guard=guardRef.current;const signatures=signaturesRef.current;return()=>{if(chart)for(const series of seriesMap.values()){try{chart.removeSeries(series);}catch{/* disposed */}}seriesMap.clear();cache.clear();guard.reset();signatures.clear();workerRef.current?.stop();workerRef.current=null;};},[chartEpoch,chartRef]);
 
   const replaySlice=isReplaying?chartData:undefined;
   useEffect(() => {
