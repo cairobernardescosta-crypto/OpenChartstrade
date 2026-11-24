@@ -8,6 +8,7 @@ export function sharedPrefix(a:readonly CandleData[],b:readonly CandleData[]){le
 type Entry={signature:string;input:CandleData[];output:IndicatorPoint[]};
 export class CalculationCache{
  private entries=new Map<string,Entry>();
+ stats(){return {entries:this.entries.size,points:[...this.entries.values()].reduce((n,e)=>n+e.input.length+e.output.length,0)};}
  constructor(private maxEntries=12,private maxPoints=100000){}
  calculate(config:ImportedIndicator,bars:CandleData[]):{points:IndicatorPoint[];cached:boolean;incremental:boolean}{
   const signature=JSON.stringify([config.kind,config.period,config.expression,parameterValues(config),config.aggregation,config.historySource]);

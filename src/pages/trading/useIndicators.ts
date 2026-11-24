@@ -56,7 +56,8 @@ export function useIndicators(
   const colors = isDark ? CHART_COLORS.dark : CHART_COLORS.light;
   const [history,setHistory]=useState<{key:string;rows:Record<number,CandleData[]>;errors?:Record<number,string>}>({key:"",rows:{}});
   const allowedCustom=activeIndicators.filter(x=>x.startsWith("custom:")).slice(0,admin.maxActive);
-  const periods=[...new Set(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind!=="graphics"&&x.kind!=="session-candle"&&x.historySource==="independent"&&historyPlan(x.aggregation)).map(x=>x.aggregation))].sort((a,b)=>a-b).slice(0,6);
+  const requestedPeriods=[...new Set(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind!=="graphics"&&x.kind!=="session-candle"&&x.historySource==="independent"&&historyPlan(x.aggregation)).map(x=>x.aggregation))].sort((a,b)=>a-b);
+  const periods=requestedPeriods.slice(0,6);
   const periodKey=periods.join(",");
   const lastTime=chartData[chartData.length-1]?.time;
   const replayCutoff=isReplaying&&typeof lastTime==="number"?lastTime:0;
@@ -113,6 +114,7 @@ export function useIndicators(
           try {
           const external=entry.historySource==="independent"&&entry.aggregation!==0;
           const bounded=external?(history.key===historyKey?history.rows[entry.aggregation]??[]:[]).slice(-admin.maxBars):aggregation.get(entry.aggregation);
+          if(external&&!periods.includes(entry.aggregation)){reportIndicator(scope,entry.id,0,0,"Independent period limit reached (6 per chart)");continue;}
           if(external&&(!bounded.length||history.errors?.[entry.aggregation])){reportIndicator(scope,entry.id,0,0,history.key!==historyKey?"Loading market history":history.errors?.[entry.aggregation]??"No completed market history");continue;}
           const result=cache.calculate(entry,bounded);
           const data=external?alignHistoryPoints(result.points,indCandles,historyMaxAge(entry.aggregation)):entry.aggregation!==0?alignHistoryPoints(result.points.map(p=>({...p,time:p.time+sourceSeconds})),indCandles):result.points;
@@ -300,13 +302,14 @@ export function useIndicators(
 
   useEffect(()=>{const chart=chartRef.current;const seriesMap=indicatorSeriesRef.current;const cache=cacheRef.current;const guard=guardRef.current;const signatures=signaturesRef.current;return()=>{if(chart)for(const series of seriesMap.values()){try{chart.removeSeries(series);}catch{/* disposed */}}seriesMap.clear();cache.clear();guard.reset();signatures.clear();};},[chartEpoch,chartRef]);
 
+  const replaySlice=isReplaying?chartData:undefined;
   useEffect(() => {
     const series = candleSeriesRef.current;
     if (!series) return;
     const allowed=activeIndicators.filter(x=>x.startsWith("custom:")).slice(0,admin.maxActive);
-    const primitives = library.filter(x => allowed.includes(`custom:${x.id}`)).flatMap(x => {const entry=resolveIndicator(x,overrides);if(!entry.visible)return [];const items:import("lightweight-charts").ISeriesPrimitive<Time>[]=[];if(entry.kind==="session-candle")items.push(new SessionCandlePrimitive(entry,sourceSeconds,admin.maxBars,isReplaying?chartData:undefined));if(entry.graphics.length)items.push(new GraphicPrimitive(entry.graphics,isReplaying?chartData:undefined));return items;});
+    const primitives = library.filter(x => allowed.includes(`custom:${x.id}`)).flatMap(x => {const entry=resolveIndicator(x,overrides);if(!entry.visible)return [];const items:import("lightweight-charts").ISeriesPrimitive<Time>[]=[];if(entry.kind==="session-candle")items.push(new SessionCandlePrimitive(entry,sourceSeconds,admin.maxBars,replaySlice));if(entry.graphics.length)items.push(new GraphicPrimitive(entry.graphics,replaySlice));return items;});
     const attached:typeof primitives=[];
     for (const primitive of primitives) {try{series.attachPrimitive(primitive);attached.push(primitive);}catch(e){console.warn("Indicator attachment failed",e);}}
     return () => { for (const primitive of attached) { try { series.detachPrimitive(primitive); } catch { /* disposed chart */ } } };
-  }, [activeIndicators, library, overrides, admin, sourceSeconds, chartEpoch, isReplaying, chartData]);
+  }, [activeIndicators, library, overrides, admin, sourceSeconds, chartEpoch, isReplaying, replaySlice]);
 }

@@ -7,7 +7,7 @@ import {usePersistenceError} from "../../../lib/indicator-sdk/database";
 import { useOverrides, saveOverride, resetOverride, clearOverrides, resolveIndicator, exportOverrides, restoreOverrides, type ChartScope } from "../../../lib/indicator-sdk/instances";
 import type { IndicatorType } from "../../../lib/indicators";
 import { HTF_EXAMPLE, parseIndicator, indicatorSchema, type ImportedIndicator } from "../../../lib/indicator-sdk/schema";
-import { useIndicatorLibrary, installIndicator, updateIndicator, removeIndicator, duplicateIndicator, versions, restoreVersion, exportLibrary, restoreLibrary, getLibraryError, recoverLibraryMirror } from "../../../lib/indicator-sdk/storage";
+import { useIndicatorLibrary, installIndicator, updateIndicator, removeIndicator, duplicateIndicator, versions, restoreVersion, setIndicatorFavorite, exportLibrary, restoreLibrary, getLibraryError, recoverLibraryMirror } from "../../../lib/indicator-sdk/storage";
 
 export function IndicatorLibraryMenu({active,toggle,scope="primary"}:{active: IndicatorType[];toggle:(type:IndicatorType)=>void;scope?:ChartScope}) {
   const library=useIndicatorLibrary();
@@ -66,7 +66,7 @@ export function IndicatorLibraryMenu({active,toggle,scope="primary"}:{active: In
       <label>Color <input type="color" value={draft.color} onChange={e=>setDraft({...draft,color:e.target.value})}/></label>
       <div className="flex gap-2"><button onClick={()=>attempt(()=>{const value=indicatorSchema.parse(draft); if(localEdit)saveOverride(scope,value);else if(library.some(x=>x.id===value.id)){if(!window.confirm("Replace installed indicator definition?"))return;updateIndicator(value);}else installIndicator(value);setDraft(null);})}>Save</button><button onClick={()=>setDraft(null)}>Cancel</button></div>
     </div>}
-    {viewSource!==null&&<div className="space-y-1"><textarea readOnly aria-label="Indicator definition source" className="w-full h-32 bg-background border border-border font-mono text-xs" value={viewSource}/><button onClick={()=>setViewSource(null)}>Close source</button></div>}
+    {viewSource!==null&&<div className="space-y-1"><textarea aria-label="Indicator definition source" className="w-full h-32 bg-background border border-border font-mono text-xs" value={viewSource} onChange={e=>setViewSource(e.target.value)}/><button onClick={()=>attempt(()=>{setLocalEdit(false);setDraft(parseIndicator(viewSource));setViewSource(null);})}>Preview edited source</button><button onClick={()=>setViewSource(null)}>Close source</button></div>}
     {storageError&&<p role="alert" className="text-xs text-red-400 break-words">{storageError}</p>}
     {error && <p role="alert" className="text-xs text-red-400 break-words">{error}</p>}
     {library.length>0 && <input aria-label="Search imported indicators" className="w-full bg-background border border-border rounded px-1 text-xs" placeholder="Search imported" value={query} onChange={e=>setQuery(e.target.value)}/>}
@@ -75,7 +75,7 @@ export function IndicatorLibraryMenu({active,toggle,scope="primary"}:{active: In
       const id:IndicatorType=`custom:${x.id}`;
       return <div key={x.id} className="flex flex-wrap gap-2 items-center text-xs px-1 py-1 border-b border-border">
         <button className="flex-1 text-left truncate" aria-pressed={active.includes(id)} onClick={()=>attempt(()=>{if(!active.includes(id)&&active.filter(x=>x.startsWith("custom:")).length>=admin.maxActive)throw new Error("Active indicator limit reached");toggle(id);})}>{active.includes(id)?"✓ ":"+ "}{x.name}</button>
-        <button aria-label={"Favorite "+x.name} onClick={()=>attempt(()=>updateIndicator({...x,favorite:!x.favorite}))}>{x.favorite?"★":"☆"}</button>
+        <button aria-label={"Favorite "+x.name} onClick={()=>attempt(()=>setIndicatorFavorite(x.id,!x.favorite))}>{x.favorite?"★":"☆"}</button>
         <button aria-label={"Duplicate "+x.name} onClick={()=>attempt(()=>duplicateIndicator(x.id))}>Copy</button>
         {versions(x.id).length>0 && <button aria-label={"History of "+x.name} onClick={()=>setRevisionId(revisionId===x.id?null:x.id)}>Versions</button>}
         <button aria-label={"View source "+x.name} onClick={()=>setViewSource("export default "+JSON.stringify(x,null,2)+";")}>Code</button>
