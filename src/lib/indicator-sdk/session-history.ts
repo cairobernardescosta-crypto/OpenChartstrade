@@ -16,7 +16,7 @@ export class SessionHistoryCache{
  constructor(private load:Loader,private now=Date.now){}
  get(symbol:string,config:ImportedIndicator,cutoff:number,maxBars:number){
  const plan=sessionHistoryPlan(config,cutoff,maxBars);
- if(!plan)return Promise.resolve({rows:[],step:60,error:"Session boundaries exceed available history budget",coveredThrough:0});
+ if(!plan)return Promise.resolve({rows:[],step:60,error:"A sessão excede o limite de histórico disponível",coveredThrough:0});
  const key=JSON.stringify([symbol,plan.timeframe,plan.rangeStart,plan.rangeEnd,plan.through,config.sessionSchedule,config.gapPolicy]);
  const cached=this.rows.get(key);if(cached&&cached.expires>this.now())return cached.promise;
  const promise=this.fetch(symbol,config,cutoff,plan).catch(e=>{this.rows.delete(key);throw e;});
@@ -24,10 +24,10 @@ export class SessionHistoryCache{
  }
  private async fetch(symbol:string,config:ImportedIndicator,cutoff:number,plan:NonNullable<ReturnType<typeof sessionHistoryPlan>>):Promise<SessionHistory>{
  const {step,timeframe,rangeStart,through}=plan;const data=new Map<number,CandleData>();
- if(through<=rangeStart)return {rows:[],step,error:"Waiting for first completed candle",coveredThrough:rangeStart};
+ if(through<=rangeStart)return {rows:[],step,error:"Aguardando a primeira vela fechada",coveredThrough:rangeStart};
  for(let end=through;end>rangeStart;){const start=Math.max(rangeStart,end-5000*step);const rows=await this.load(symbol,timeframe,Math.ceil((end-start)/step),{fromMs:start*1000,toMs:end*1000});for(const c of rows)if(validMarketBar(c)&&c.time%step===0&&c.time>=start&&c.time+step<=end)data.set(c.time,c);end=start;}
  const rows=[...data.values()].sort((a,b)=>a.time-b.time);
  const valid=sessionRange(rows,config,step,cutoff,true);
- return {rows:valid?rows:[],step,error:valid?"":"Incomplete session history — missing closed candles",coveredThrough:valid?through:rangeStart};
+ return {rows:valid?rows:[],step,error:valid?"":"Histórico da sessão incompleto — faltam velas fechadas",coveredThrough:valid?through:rangeStart};
  }
 }

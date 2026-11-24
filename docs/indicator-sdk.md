@@ -81,3 +81,6 @@ The adapter contract optionally supplies a recurring session for a symbol at a g
 
 ## M23 market-data preview
 The indicator editor uses the selected chart's actual closed bars, or independent historical data according to the indicator configuration. Replay is bounded to the replay timestamp. Session previews use the session calculation and optional provider schedule. Illustrative candles require explicit selection and are labeled. Graphics-only commands retain a summary and require activation for full rendering. Local tests and visual verification pending.
+
+## L01 interface em português
+Rótulos da biblioteca, editor, prévia, administração e backup traduzidos para pt-BR. Identificadores de esquema, valores dos selects, código importado e formatos persistidos permanecem inalterados. Mensagens técnicas adicionais serão tratadas em L06. Corrigido também um fragmento JSX malformado na área de altura do painel e cor. Validação local pendente.
