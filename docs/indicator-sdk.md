@@ -30,3 +30,6 @@ Imported expressions execute only through the bounded interpreter, with a 20,000
 
 ## Drawing object lifecycle
 Graphics support optional stable IDs, individual updates/removal, visibility, three primitive layers, OHLC-relative price anchors and custom OHLC candle drawings. Mathematical indicators may carry graphics in addition to their plot. Independent overlay price scales are supported; true separate lower panes require a chart-library migration and are not implemented here. No arbitrary script execution is introduced. Local verification pending.
+
+## Manager phase
+A unified JSON backup contains definitions, history, both chart scopes and administrative settings. All sections are validated before restore; writes remain separate queued IndexedDB transactions, not atomic across stores. The manager supports original definition editing and selection of up to five saved revisions. Startup hydration guards prevent library and override changes during initial reads. Existing separate backup controls remain available. Browser migration and restore tests remain pending.
