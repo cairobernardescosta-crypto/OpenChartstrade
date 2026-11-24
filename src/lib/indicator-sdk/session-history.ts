@@ -17,7 +17,7 @@ export class SessionHistoryCache{
  get(symbol:string,config:ImportedIndicator,cutoff:number,maxBars:number){
  const plan=sessionHistoryPlan(config,cutoff,maxBars);
  if(!plan)return Promise.resolve({rows:[],step:60,error:"A sessão excede o limite de histórico disponível",coveredThrough:0});
- const key=JSON.stringify([symbol,plan.timeframe,plan.rangeStart,plan.rangeEnd,plan.through,config.sessionSchedule,config.gapPolicy]);
+ const key=JSON.stringify([symbol,plan.timeframe,plan.rangeStart,plan.rangeEnd,plan.through,maxBars,config.sessionSchedule,config.gapPolicy]);
  const cached=this.rows.get(key);if(cached&&cached.expires>this.now())return cached.promise;
  const promise=this.fetch(symbol,config,cutoff,plan).catch(e=>{this.rows.delete(key);throw e;});
  this.rows.set(key,{expires:this.now()+15000,promise});while(this.rows.size>24){const first=this.rows.keys().next().value;if(first===undefined)break;this.rows.delete(first);}return promise;
@@ -28,6 +28,6 @@ export class SessionHistoryCache{
  for(let end=through;end>rangeStart;){const start=Math.max(rangeStart,end-5000*step);const rows=await this.load(symbol,timeframe,Math.ceil((end-start)/step),{fromMs:start*1000,toMs:end*1000});for(const c of rows)if(validMarketBar(c)&&c.time%step===0&&c.time>=start&&c.time+step<=end)data.set(c.time,c);end=start;}
  const rows=[...data.values()].sort((a,b)=>a.time-b.time);
  const valid=sessionRange(rows,config,step,cutoff,true);
- return {rows:valid?rows:[],step,error:valid?"":"Histórico da sessão incompleto — faltam velas fechadas",coveredThrough:valid?through:rangeStart};
+ return {rows:valid?rows:[],step,error:valid?"":"Histórico de sessão incompleto — faltam velas fechadas",coveredThrough:valid?through:rangeStart};
  }
 }

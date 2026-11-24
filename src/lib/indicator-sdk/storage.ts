@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import {persistState,readMirror,hydrateState,assertWritable} from "./database";
+import {persistState,persistStates,readMirror,hydrateState,assertWritable} from "./database";
 import { indicatorSchema, type ImportedIndicator } from "./schema";
 import {parseRevisions,sortedRevisions,archiveRevision,type IndicatorRevision} from "./revisions";
 const KEY="opencharts.indicator-library.v1";
@@ -16,12 +16,12 @@ export function useIndicatorLibrary(){return useSyncExternalStore(subscribe,getL
 export function getLibraryError(){return error;}
 function save(next:ImportedIndicator[]){assertLibraryReady();assertWritable();revision++;library=next;persistState(KEY,next);listeners.forEach(fn=>fn());}
 export function installIndicator(value:ImportedIndicator){const entry=indicatorSchema.parse(value);if(library.some(x=>x.id===entry.id))throw new Error("Indicator ID already installed");if(library.length>=100)throw new Error("Library limit reached");save([...library,entry]);}
-export function updateIndicator(value:ImportedIndicator){assertLibraryReady();assertWritable();const entry=indicatorSchema.parse(value);const old=library.find(x=>x.id===entry.id);if(!old)throw new Error("Indicator not installed");const previous=Object.hasOwn(history,entry.id)?history[entry.id]!:[];const next={...history,[entry.id]:archiveRevision(old,previous)};history=next;persistState(HISTORY,next);save(library.map(x=>x.id===entry.id?entry:x));}
-export function removeIndicator(id:string){assertLibraryReady();save(library.filter(x=>x.id!==id));}
+export async function updateIndicator(value:ImportedIndicator){assertLibraryReady();assertWritable();const entry=indicatorSchema.parse(value);const old=library.find(x=>x.id===entry.id);if(!old)throw new Error("Indicator not installed");const previous=Object.hasOwn(history,entry.id)?history[entry.id]!:[];const nextHistory={...history,[entry.id]:archiveRevision(old,previous)};const nextLibrary=library.map(x=>x.id===entry.id?entry:x);await persistStates({[HISTORY]:nextHistory,[KEY]:nextLibrary});revision++;history=nextHistory;library=nextLibrary;listeners.forEach(fn=>fn());}
+export async function removeIndicator(id:string){assertLibraryReady();assertWritable();const nextHistory={...history};delete nextHistory[id];const nextLibrary=library.filter(x=>x.id!==id);await persistStates({[HISTORY]:nextHistory,[KEY]:nextLibrary});revision++;history=nextHistory;library=nextLibrary;listeners.forEach(fn=>fn());}
 export async function recoverLibraryMirror(){assertLibraryReady();const before=revision;const rows=indicatorSchema.array().max(100).parse(await readMirror(KEY));if(new Set(rows.map(x=>x.id)).size!==rows.length)throw new Error("Duplicate IDs in mirror");if(revision!==before)throw new Error("Library changed during recovery");save(rows);}
 export function revisionEntries(id:string){return sortedRevisions(Object.hasOwn(history,id)?history[id]!:[]);}
 export function versions(id:string){return revisionEntries(id).map(x=>x.revision.definition);}
-export function restoreRevisionEntry(id:string,index:number,expected:IndicatorRevision){const row=history[id]?.[index];if(!row||row!==expected||row.definition.id!==id)throw new Error("A revisão mudou. Reabra o histórico.");updateIndicator(row.definition);}
+export function restoreRevisionEntry(id:string,index:number,expected:IndicatorRevision){const row=history[id]?.[index];if(!row||row!==expected||row.definition.id!==id)throw new Error("A revisão mudou. Reabra o histórico.");return updateIndicator(row.definition);}
 export function duplicateIndicator(id:string){const entry=library.find(x=>x.id===id);if(!entry)throw new Error("Indicator not installed");let n=1;let next=id.slice(0,50)+"-copy-"+n;while(library.some(x=>x.id===next)){n++;next=id.slice(0,50)+"-copy-"+n;}installIndicator({...entry,id:next,name:(entry.name+" copy "+n).slice(0,80),favorite:false});}
 export function exportLibrary(){return JSON.stringify({sdk:1,indicators:library,history},null,2);}
 export function restoreLibrary(source:string){assertLibraryReady();assertWritable();const data=validateLibraryBackup(source);history=data.history;persistState(HISTORY,history);save(data.indicators);}
@@ -39,7 +39,7 @@ export function isLibraryReady(){return ready;}
 export function assertLibraryReady(){if(!ready)throw new Error("Indicator storage is loading; retry shortly");}
 void Promise.all([libraryHydration,historyHydration]).finally(()=>{ready=true;library=[...library];listeners.forEach(fn=>fn());});
 export function validateLibraryBackup(source:string){if(source.length>12_000_000)throw new Error("Backup too large");const raw=JSON.parse(source);if(!raw||raw.sdk!==1)throw new Error("Unsupported library backup");return {sdk:1,indicators:validRows(raw.indicators),history:validHistory(raw.history??{})};}
-export function restoreVersion(id:string,index:number){const previous=versions(id)[index];if(!previous||previous.id!==id)throw new Error("Unknown revision");updateIndicator(previous);}
+export function restoreVersion(id:string,index:number){const previous=versions(id)[index];if(!previous||previous.id!==id)throw new Error("Unknown revision");return updateIndicator(previous);}
 
 export function applyRestoredLibrary(data:ReturnType<typeof validateLibraryBackup>){revision++;library=data.indicators;history=data.history;listeners.forEach(fn=>fn());}
 

@@ -40,8 +40,8 @@ export default defineConfig({
       tsconfigPath: "./tsconfig.lib.json",
       entryRoot: "src",
       outDir: "dist-lib",
-      include: ["src"],
-      exclude: ["src/__tests__", "src/main.tsx", "src/Root.tsx"],
+      include: ["src", "vite-env.d.ts"],
+      exclude: ["src/**/__tests__/**", "src/main.tsx", "src/Root.tsx"],
     }),
   ],
   resolve: {

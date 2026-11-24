@@ -72,6 +72,7 @@ export function useIndicators(
   const admin = useIndicatorAdmin();
   const overrides = useOverrides(scope);
   const colors = visualColors??(isDark ? CHART_COLORS.dark : CHART_COLORS.light);
+  const trendColors = isDark ? CHART_COLORS.dark : CHART_COLORS.light;
   const [history,setHistory]=useState<{key:string;rows:Record<string,CandleData[]>;errors?:Record<string,string>}>({key:"",rows:{}});
   const allowedCustom=activeIndicators.filter(x=>x.startsWith("custom:")).slice(0,admin.maxActive);
   const historyDefinitions=JSON.stringify(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind!=="graphics"&&x.historySource==="independent"&&(x.kind==="session-candle"||x.aggregation!==0)));
@@ -185,7 +186,7 @@ export function useIndicators(
             const options={lineColor:entry.color,topColor:entry.color+"55",bottomColor:entry.color+"00",priceScaleId:scaleId};
             if(!area){area=owner.addAreaSeries(options);owners.set(key,owner);indicatorSeriesRef.current.set(key,area);}else area.applyOptions(options);
             area.setData(points);
-          }else line(key,{color:entry.color,lineWidth:entry.lineWidth as 1|2|3|4|5,priceScaleId:scaleId},owner).setData(points);
+          }else line(key,{color:entry.color,lineWidth:Math.min(entry.lineWidth,4) as 1|2|3|4,priceScaleId:scaleId},owner).setData(points);
           guard.success(type);
           if(admin.diagnostics)reportIndicator(scope,entry.id,reply?.ms??performance.now()-started,bounded.length,gaps.missing?`${gaps.missing} missing history intervals`:"",result.incremental?"incremental":result.cached?"cache":"full",reply?.stats.points??cache.stats().points);
           }catch(e){if(disposed)return;used.delete(type+":"+entry.plot);const failures=guard.fail(type);reportIndicator(scope,entry.id,performance.now()-started,0,(e instanceof Error?e.message:String(e))+(guard.blocked(type)?" — paused after "+failures+" failures":""));}
@@ -268,7 +269,7 @@ export function useIndicators(
             data.histogram.map((p) => ({
               time: p.time as Time,
               value: p.value,
-              color: p.value >= 0 ? colors.up + "99" : colors.down + "99",
+              color: p.value >= 0 ? trendColors.up + "99" : trendColors.down + "99",
             })),
           );
           indicatorSeriesRef.current.set("MACD-hist", histo);

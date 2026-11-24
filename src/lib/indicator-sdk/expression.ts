@@ -7,7 +7,7 @@ type FunctionName=keyof typeof functions;
 type Node = { kind:"number"; value:number } | {kind:"field"; field:"open"|"high"|"low"|"close"|"volume"} | {kind:"parameter";name:string} | {kind:"function";name:FunctionName;arg:Node} | {kind:"binary"; op:string; left:Node; right:Node};
 export function compileExpression(source:string,parameters:Readonly<Record<string,number>>={}): (c:CandleData)=>number {
   if(source.length>512) throw new Error("Expression too long");
-  const tokens=source.match(/\d+(?:\.\d+)?|[a-zA-Z][a-zA-Z0-9_]*|[+*/()%\-]|\s+|./g)?.filter(t=>!/^\s+$/.test(t))??[];
+  const tokens=source.match(/\d+(?:\.\d+)?|[a-zA-Z][a-zA-Z0-9_]*|[+*/()%-]|\s+|./g)?.filter(t=>!/^\s+$/.test(t))??[];
   if(tokens.length>128)throw new Error("Too many tokens");
   let i=0;
   function atom(depth:number):Node {

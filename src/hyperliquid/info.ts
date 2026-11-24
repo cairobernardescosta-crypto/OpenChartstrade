@@ -177,6 +177,8 @@ export interface InfoClientOptions {
   baseDelayMs?: number;
   /** How long `meta`-class responses stay cached (default 5 min). */
   cacheTtlMs?: number;
+  /** Maximum duration of each REST attempt (default 15s). */
+  requestTimeoutMs?: number;
   /** Injected in tests. */
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
@@ -223,6 +225,7 @@ export function createInfoClient(options: InfoClientOptions = {}): InfoClient {
   const maxRetries = options.maxRetries ?? 3;
   const baseDelay = options.baseDelayMs ?? 500;
   const ttl = options.cacheTtlMs ?? 5 * 60_000;
+  const requestTimeoutMs = options.requestTimeoutMs ?? 15_000;
   const sleep = options.sleep ?? defaultSleep;
   const now = options.now ?? Date.now;
   const url = () => `${(options.baseUrl ?? getEndpoints().rest).replace(/\/$/, "")}/info`;
@@ -234,11 +237,14 @@ export function createInfoClient(options: InfoClientOptions = {}): InfoClient {
     let lastError: HlInfoError | null = null;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       let retryAfter: number | null = null;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
       try {
         const res = await doFetch(url(), {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(body),
+          signal: controller.signal,
         });
         if (res.ok) {
           return (await res.json()) as T;
@@ -255,11 +261,18 @@ export function createInfoClient(options: InfoClientOptions = {}): InfoClient {
           if (!isRetryableStatus(err.status ?? 0)) throw err;
         } else {
           // Network failure / JSON parse failure: retry.
+          const detail = controller.signal.aborted
+            ? "request timed out"
+            : err instanceof Error
+              ? err.message
+              : "network error";
           lastError = new HlInfoError(
-            `Hyperliquid info "${String(body.type)}" failed: ${err instanceof Error ? err.message : "network error"}`,
+            `Hyperliquid info "${String(body.type)}" failed: ${detail}`,
             null,
           );
         }
+      } finally {
+        clearTimeout(timeout);
       }
       if (attempt < maxRetries) {
         const backoff = Math.min(8_000, baseDelay * 2 ** attempt);

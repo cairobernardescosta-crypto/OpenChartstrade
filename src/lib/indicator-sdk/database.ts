@@ -28,6 +28,14 @@ function cached(key:string):Envelope|undefined{try{const raw=localStorage.getIte
 function cache(key:string,row:Envelope){try{localStorage.setItem(key+".revision",JSON.stringify(row));localStorage.setItem(key,JSON.stringify(row.value));}catch(e){setError("Recovery cache: "+String(e));}}
 async function write(rows:Record<string,Envelope>){const db=await openDatabase();await new Promise<void>((resolve,reject)=>{const tx=db.transaction("state","readwrite");for(const [key,value] of Object.entries(rows))tx.objectStore("state").put(value,key);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});}
 export function persistState(key:string,value:unknown){assertWritable();const row=make(value);cache(key,row);queue=queue.then(()=>write({[key]:row})).catch(e=>{setError("IndexedDB write failed: "+String(e));database=undefined;});}
+export async function persistStates(values:Record<string,unknown>){
+ assertWritable();
+ const rows=Object.fromEntries(Object.entries(values).map(([key,value])=>[key,make(value)]));
+ const operation=queue.then(()=>write(rows));
+ queue=operation.catch(e=>{setError("IndexedDB write failed: "+String(e));database=undefined;});
+ try{await operation;for(const [key,row] of Object.entries(rows))cache(key,row);}
+ catch(e){throw new Error("IndexedDB write failed: "+String(e));}
+}
 export const mirrorState=persistState;
 async function readRaw(key:string):Promise<unknown>{await queue;const db=await openDatabase();return new Promise((resolve,reject)=>{const req=db.transaction("state","readonly").objectStore("state").get(key);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 export async function readMirror(key:string):Promise<unknown>{return envelope(await readRaw(key)).value;}

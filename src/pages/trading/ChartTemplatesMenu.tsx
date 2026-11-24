@@ -248,10 +248,10 @@ export function ChartTemplatesMenu(props: ChartTemplatesMenuProps) {
   const prefs = useChartPreferences(indicatorScope);
   const { templates, save, remove } = useChartTemplates();
   const [open, setOpen] = useState(false);
-  const [manageMode, setManageMode] = useS  const activeName=prefs.activeChartTemplate;
+  const [manageMode, setManageMode] = useState(false);
+  const activeName=prefs.activeChartTemplate;
   const autosave=prefs.chartTemplateAutosave;
   const setActiveName=(name:string)=>updateChartPreferences({activeChartTemplate:name},indicatorScope);
-ilable */}}};
   const content:ChartTemplateContent = {...snapshotContent(prefs, activeIndicators, activePlugins), ...buildTemplateSnapshot(library,overrides,activeIndicators)};
 
   // react-query guarantees `mutate` identity is stable across renders.

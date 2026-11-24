@@ -106,7 +106,7 @@ describe("session replay", () => {
 
   it("returns bars in chronological order inside the requested day", async () => {
     const session = await replay.getSession(today);
-    const start = new Date(`${today}T00:00:00`).getTime();
+    const start = Date.parse(`${today}T00:00:00Z`);
     const end = start + 24 * 60 * 60 * 1000;
     for (const bar of session.tickBuffer) {
       expect(bar.t).toBeGreaterThanOrEqual(start);
@@ -172,7 +172,7 @@ describe("session replay", () => {
     engine.closePosition(engine.getPositions()[0]!.id);
 
     const accountId = (await api.getMyAccounts())[0]!.id;
-    const session = await replay.getSession(today, "BTCUSD", accountId);
+    const session = await api.replayGetSession(accountId, today, "BTCUSD");
     expect(session.tradeEvents.length).toBeGreaterThan(0);
     expect(session.tradeEvents[0]).toMatchObject({ type: "exit", symbolName: "BTCUSD" });
   });

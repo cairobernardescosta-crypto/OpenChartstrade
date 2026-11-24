@@ -64,7 +64,9 @@ function emit(action: string, opts: { speed?: number; cursorTimestamp?: number }
 }
 
 function dayBounds(sessionDate: string): { startMs: number; endMs: number } {
-  const startMs = new Date(`${sessionDate}T00:00:00`).getTime();
+  // Candle timestamps are epoch/UTC. Parsing an ISO date without an explicit
+  // zone would shift the replay window with the browser timezone and DST.
+  const startMs = Date.parse(`${sessionDate}T00:00:00Z`);
   return { startMs, endMs: startMs + 24 * 60 * 60 * 1000 };
 }
 

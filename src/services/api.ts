@@ -85,38 +85,106 @@ const DRAW_KEY = (symbol: string) => `oc_drawings_${symbol}`;
 const JOURNAL_KEY = "oc_journal_entries";
 
 const DRAW_INDEX="oc_drawings_index";
+let drawingMutation: Promise<void> = Promise.resolve();
+
+function enqueueDrawingMutation<T>(operation: () => Promise<T>): Promise<T> {
+  const result = drawingMutation.then(operation, operation);
+  drawingMutation = result.then(() => undefined, () => undefined);
+  return result;
+}
+
+function parseDrawingIndex(raw: string | null): string[] {
+  const value: unknown = JSON.parse(raw ?? "[]");
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
+    throw new Error("Invalid drawing index");
+  }
+  return [...new Set(value)];
+}
+
+async function readDrawings(symbol: string): Promise<DrawingLine[]> {
+  const storage = getAdapter().storage;
+  if (!storage) return [];
+  const raw = await storage.get(DRAW_KEY(symbol));
+  const groups = drawingGroupsSchema.parse([{
+    symbol,
+    drawings: JSON.parse(raw ?? "[]"),
+  }]);
+  return groups[0]!.drawings as DrawingLine[];
+}
+
 const chartDrawings = {
   exportAll: async () => {const storage=getAdapter().storage;if(!storage)throw new Error("Drawing storage unavailable");const index=JSON.parse(await storage.get(DRAW_INDEX)??"[]") as string[];const symbols=await api.getSymbols();const names=[...new Set([...index,...symbols.map(s=>s.name)])];const groups=await Promise.all(names.map(async symbol=>({symbol,drawings:JSON.parse(await storage.get(DRAW_KEY(symbol))??"[]")})));return drawingGroupsSchema.parse(groups.filter(g=>Array.isArray(g.drawings)&&g.drawings.length));},
-  importAll: async (raw:unknown) => {const groups=drawingGroupsSchema.parse(raw);const storage=getAdapter().storage;if(!storage)throw new Error("Drawing storage unavailable");const previous=new Map<string,string|null>();const index=JSON.parse(await storage.get(DRAW_INDEX)??"[]") as string[];const keys=[DRAW_INDEX,...groups.map(g=>DRAW_KEY(g.symbol))];for(const key of keys)previous.set(key,await storage.get(key));try{for(const g of groups){const old=drawingGroupsSchema.parse([{symbol:g.symbol,drawings:JSON.parse(previous.get(DRAW_KEY(g.symbol))??"[]")}])[0]!.drawings;const merged=new Map(old.map(d=>[d.id,d]));for(const d of g.drawings)merged.set(d.id,d);await storage.set(DRAW_KEY(g.symbol),JSON.stringify([...merged.values()]));}await storage.set(DRAW_INDEX,JSON.stringify([...new Set([...index,...groups.map(g=>g.symbol)])]));}catch(e){for(const [key,value] of previous){if(value===null)await storage.remove(key);else await storage.set(key,value);}throw e;}return async()=>{for(const [key,value] of previous){if(value===null)await storage.remove(key);else await storage.set(key,value);}};},
+  importAll: async (raw:unknown) => {
+    const groups=drawingGroupsSchema.parse(raw);
+    return enqueueDrawingMutation(async()=>{
+      const storage=getAdapter().storage;
+      if(!storage)throw new Error("Drawing storage unavailable");
+      const index=parseDrawingIndex(await storage.get(DRAW_INDEX));
+      const symbols=[...new Set([...index,...groups.map(g=>g.symbol)])];
+      const keys=[DRAW_INDEX,...symbols.map(DRAW_KEY)];
+      const previous=new Map<string,string|null>();
+      for(const key of keys)previous.set(key,await storage.get(key));
+      const restore=async()=>{for(const [key,value] of previous){if(value===null)await storage.remove(key);else await storage.set(key,value);}};
+      try{
+        const incoming=new Map(groups.map(group=>[group.symbol,group.drawings]));
+        for(const symbol of symbols){
+          const drawings=incoming.get(symbol);
+          if(drawings===undefined)await storage.remove(DRAW_KEY(symbol));
+          else await storage.set(DRAW_KEY(symbol),JSON.stringify(drawings));
+        }
+        await storage.set(DRAW_INDEX,JSON.stringify(groups.map(group=>group.symbol)));
+      }catch(error){await restore();throw error;}
+      return ()=>enqueueDrawingMutation(restore);
+    });
+  },
   list: async (symbol: string): Promise<DrawingLine[]> => {
-    const list = await readJSON<DrawingLine[]>(DRAW_KEY(symbol), []);
-    return Array.isArray(list) ? list : [];
+    return readDrawings(symbol);
   },
   save: async (symbol: string, _timeframe: string, drawing: DrawingLine) => {
-    const list = (await chartDrawings.list(symbol)).filter((d) => d.id !== drawing.id);
-    list.push(drawing);
-    await writeJSON(DRAW_KEY(symbol), list);
-    const index=await readJSON<string[]>(DRAW_INDEX,[]);await writeJSON(DRAW_INDEX,[...new Set([...index,symbol])]);
-    return { saved: true };
+    return enqueueDrawingMutation(async()=>{
+      const storage=getAdapter().storage;
+      if(!storage)throw new Error("Drawing storage unavailable");
+      const drawingKey=DRAW_KEY(symbol);
+      const previousDrawings=await storage.get(drawingKey);
+      const previousIndex=await storage.get(DRAW_INDEX);
+      const list = (await readDrawings(symbol)).filter((d) => d.id !== drawing.id);
+      list.push(drawing);
+      try{
+        await storage.set(drawingKey,JSON.stringify(list));
+        const index=parseDrawingIndex(previousIndex);
+        await storage.set(DRAW_INDEX,JSON.stringify([...new Set([...index,symbol])]));
+      }catch(error){
+        if(previousDrawings===null)await storage.remove(drawingKey);else await storage.set(drawingKey,previousDrawings);
+        if(previousIndex===null)await storage.remove(DRAW_INDEX);else await storage.set(DRAW_INDEX,previousIndex);
+        throw error;
+      }
+      return { saved: true };
+    });
   },
   remove: async (drawingId: string) => {
-    // Drawing ids are unique across symbols, so the owning list is unknown
-    // without checking each one.
-    const symbols = await api.getSymbols();
-    for (const symbol of symbols) {
-      const list = await chartDrawings.list(symbol.name);
-      if (list.some((d) => d.id === drawingId)) {
-        await writeJSON(
-          DRAW_KEY(symbol.name),
-          list.filter((d) => d.id !== drawingId),
-        );
+    return enqueueDrawingMutation(async()=>{
+      const storage=getAdapter().storage;
+      if(!storage)throw new Error("Drawing storage unavailable");
+      // Drawing ids are unique across symbols, so use both the current market
+      // catalogue and the persisted index (which retains delisted symbols).
+      const symbols = await api.getSymbols();
+      const index=parseDrawingIndex(await storage.get(DRAW_INDEX));
+      for (const symbol of new Set([...index,...symbols.map(row=>row.name)])) {
+        const list = await readDrawings(symbol);
+        if (list.some((d) => d.id === drawingId)) {
+          await storage.set(DRAW_KEY(symbol),JSON.stringify(list.filter((d) => d.id !== drawingId)));
+        }
       }
-    }
-    return { deleted: true };
+      return { deleted: true };
+    });
   },
   clear: async (symbol: string) => {
-    await writeJSON(DRAW_KEY(symbol), []);
-    return { cleared: true };
+    return enqueueDrawingMutation(async()=>{
+      const storage=getAdapter().storage;
+      if(!storage)throw new Error("Drawing storage unavailable");
+      await storage.set(DRAW_KEY(symbol), "[]");
+      return { cleared: true };
+    });
   },
 };
 
@@ -344,10 +412,10 @@ export const api = {
   // ── Session replay ──
   // Built on top of `marketData.getCandles`, so replay works against any
   // adapter rather than needing one of its own.
-  replayGetSession: (_accountId: string, sessionDate: string, symbol?: string) =>
-    replay.getSession(sessionDate, symbol),
-  replayStart: (_accountId: string, sessionDate: string, speed = 1, symbol?: string) =>
-    replay.start(sessionDate, speed, symbol),
+  replayGetSession: (accountId: string, sessionDate: string, symbol?: string) =>
+    replay.getSession(sessionDate, symbol, accountId),
+  replayStart: (accountId: string, sessionDate: string, speed = 1, symbol?: string) =>
+    replay.start(sessionDate, speed, symbol, accountId),
   replayPause: (_accountId: string, _sessionDate: string) => {
     replay.pause();
     return Promise.resolve({ success: true });

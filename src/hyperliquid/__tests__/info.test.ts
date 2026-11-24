@@ -93,6 +93,26 @@ describe("info client", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("aborts a stalled request and releases it from the in-flight map", async () => {
+    const fetchImpl = vi.fn((_url: string, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () =>
+          reject(new DOMException("aborted", "AbortError")),
+        );
+      }),
+    ) as unknown as typeof fetch;
+    const info = createInfoClient({
+      fetchImpl,
+      sleep: noSleep,
+      maxRetries: 0,
+      requestTimeoutMs: 5,
+    });
+
+    await expect(info.post({ type: "stalled" })).rejects.toThrow(/timed out/i);
+    await expect(info.post({ type: "stalled" })).rejects.toThrow(/timed out/i);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it("caches meta until the TTL passes or invalidate() is called", async () => {
     let t = 0;
     const fetchImpl = vi.fn().mockImplementation(() => Promise.resolve(jsonRes({ universe: [] })));
