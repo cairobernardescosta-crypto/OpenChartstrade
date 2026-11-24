@@ -1,0 +1,4 @@
+import {describe,it,expect} from "vitest";
+import {validateGraphics,updateGraphic,removeGraphic} from "../lib/indicator-sdk/graphics";
+const line={type:"horizontal",id:"level",color:"#ffffff",price:100};
+describe("drawing objects",()=>{it("defaults old objects",()=>expect(validateGraphics([line])[0]).toMatchObject({visible:true,layer:"normal",anchor:"price"}));it("supports individual updates and removal",()=>{const rows=validateGraphics([line]);expect(updateGraphic(rows,"level",{...line,price:101})[0]).toMatchObject({price:101});expect(removeGraphic(rows,"level")).toEqual([]);});it("rejects duplicate IDs",()=>expect(()=>validateGraphics([line,line])).toThrow());it("rejects invalid candle range",()=>expect(()=>validateGraphics([{type:"candle",bars:0,open:10,close:11,high:9,low:8,color:"#ffffff"}])).toThrow());});

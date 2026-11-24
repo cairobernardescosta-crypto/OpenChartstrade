@@ -85,14 +85,15 @@ export function useIndicators(
           const data = entry.kind === "expression" ? runBoundedExpression(bounded,entry.expression,parameterValues(entry)) : (entry.kind === "sma" ? sma : ema)(bounded, entry.period);
           if(performance.now()-started>100)throw new Error("Indicator execution budget exceeded");
           const key=type+":"+entry.plot;
+          const scaleId=entry.scale==="independent"?"indicator-"+entry.id:"right";
           const points=data.map(p=>({time:p.time as Time,value:p.value}));
-          if(entry.plot==="histogram")histogram(key,{color:entry.color,priceScaleId:"right"}).setData(points);
+          if(entry.plot==="histogram")histogram(key,{color:entry.color,priceScaleId:scaleId}).setData(points);
           else if(entry.plot==="area"){
             used.add(key);let area=indicatorSeriesRef.current.get(key) as ISeriesApi<"Area">|undefined;
-            const options={lineColor:entry.color,topColor:entry.color+"55",bottomColor:entry.color+"00",priceScaleId:"right"};
+            const options={lineColor:entry.color,topColor:entry.color+"55",bottomColor:entry.color+"00",priceScaleId:scaleId};
             if(!area){area=chart.addAreaSeries(options);indicatorSeriesRef.current.set(key,area);}else area.applyOptions(options);
             area.setData(points);
-          }else line(key,{color:entry.color,lineWidth:entry.lineWidth as 1|2|3|4|5,priceScaleId:"right"}).setData(points);
+          }else line(key,{color:entry.color,lineWidth:entry.lineWidth as 1|2|3|4|5,priceScaleId:scaleId}).setData(points);
           guard.success(type);
           if(admin.diagnostics)reportIndicator(scope,entry.id,performance.now()-started,bounded.length);
           }catch(e){used.delete(type+":"+entry.plot);const failures=guard.fail(type);reportIndicator(scope,entry.id,performance.now()-started,0,(e instanceof Error?e.message:String(e))+(guard.blocked(type)?" — paused after "+failures+" failures":""));}
@@ -269,7 +270,7 @@ export function useIndicators(
     const series = candleSeriesRef.current;
     if (!series) return;
     const allowed=activeIndicators.filter(x=>x.startsWith("custom:")).slice(0,admin.maxActive);
-    const primitives = library.filter(x => allowed.includes(`custom:${x.id}`)).flatMap(x => {const entry=resolveIndicator(x,overrides);return !entry.visible?[]:entry.kind==="session-candle"?[new SessionCandlePrimitive(entry,sourceSeconds,admin.maxBars) as import("lightweight-charts").ISeriesPrimitive<Time>]:entry.kind==="graphics"?[new GraphicPrimitive(entry.graphics) as import("lightweight-charts").ISeriesPrimitive<Time>]:[];});
+    const primitives = library.filter(x => allowed.includes(`custom:${x.id}`)).flatMap(x => {const entry=resolveIndicator(x,overrides);if(!entry.visible)return [];const items:import("lightweight-charts").ISeriesPrimitive<Time>[]=[];if(entry.kind==="session-candle")items.push(new SessionCandlePrimitive(entry,sourceSeconds,admin.maxBars));if(entry.graphics.length)items.push(new GraphicPrimitive(entry.graphics));return items;});
     const attached:typeof primitives=[];
     for (const primitive of primitives) {try{series.attachPrimitive(primitive);attached.push(primitive);}catch(e){console.warn("Indicator attachment failed",e);}}
     return () => { for (const primitive of attached) { try { series.detachPrimitive(primitive); } catch { /* disposed chart */ } } };

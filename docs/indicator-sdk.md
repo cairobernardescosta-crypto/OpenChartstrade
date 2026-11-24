@@ -27,3 +27,6 @@ Weekly aggregation aligns to Monday UTC; calendar month aggregation uses actual 
 
 ## Restricted runtime guard
 Imported expressions execute only through the bounded interpreter, with a 20,000-bar hard ceiling and cooperative 100 ms deadline checked every 64 bars. SMA/EMA duration is checked after calculation. Three consecutive failures pause the calculation until the hook is recreated (for example, toggling the indicator). Errors remain visible even when success diagnostics are disabled. This is capability restriction, not an arbitrary TypeScript sandbox or a hard browser memory/process limit. No imported code receives wallet, network or storage APIs. Local tests pending.
+
+## Drawing object lifecycle
+Graphics support optional stable IDs, individual updates/removal, visibility, three primitive layers, OHLC-relative price anchors and custom OHLC candle drawings. Mathematical indicators may carry graphics in addition to their plot. Independent overlay price scales are supported; true separate lower panes require a chart-library migration and are not implemented here. No arbitrary script execution is introduced. Local verification pending.

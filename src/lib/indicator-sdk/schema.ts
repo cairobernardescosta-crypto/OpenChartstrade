@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { compileExpression } from "./expression";
-import {graphicSchema} from "./graphics";
+import {graphicSchema,validateGraphics} from "./graphics";
 import {aggregationMinutes} from "./aggregate";
 
 const parameterSchema=z.object({key:z.string().regex(/^p_[a-z][a-z0-9_]{0,30}$/),label:z.string().min(1).max(60),min:z.number().finite(),max:z.number().finite(),step:z.number().positive().finite(),value:z.number().finite(),defaultValue:z.number().finite()}).strict().refine(p=>p.min<=p.value&&p.value<=p.max&&p.min<=p.defaultValue&&p.defaultValue<=p.max,"Parameter outside bounds");
@@ -17,6 +17,7 @@ export const indicatorSchema = z.object({
   expression: z.string().max(512).default("close"),
   parameters:z.array(parameterSchema).max(20).default([]),
   plot:z.enum(["line","histogram","area"]).default("line"),
+  scale:z.enum(["price","independent"]).default("price"),
   category:z.string().max(60).default("Custom"),
   visible:z.boolean().default(true),
   aggregation:z.number().refine(v=>aggregationMinutes.some(m=>m===v),"Unsupported aggregation").default(0),
@@ -44,7 +45,7 @@ export const indicatorSchema = z.object({
   showOpen: z.boolean().default(true),
   showClose: z.boolean().default(true),
   showHighLow: z.boolean().default(true),
-}).strict().superRefine((value,ctx)=>{if(new Set(value.parameters.map(p=>p.key)).size!==value.parameters.length)ctx.addIssue({code:"custom",path:["parameters"],message:"Duplicate parameter keys"});if(value.kind==="expression"){try{compileExpression(value.expression,parameterValues(value));}catch(e){ctx.addIssue({code:"custom",path:["expression"],message:String(e)});}}});
+}).strict().superRefine((value,ctx)=>{try{validateGraphics(value.graphics);}catch(e){ctx.addIssue({code:"custom",path:["graphics"],message:String(e)});}if(new Set(value.parameters.map(p=>p.key)).size!==value.parameters.length)ctx.addIssue({code:"custom",path:["parameters"],message:"Duplicate parameter keys"});if(value.kind==="expression"){try{compileExpression(value.expression,parameterValues(value));}catch(e){ctx.addIssue({code:"custom",path:["expression"],message:String(e)});}}});
 
 export type ImportedIndicator = z.infer<typeof indicatorSchema>;
 
