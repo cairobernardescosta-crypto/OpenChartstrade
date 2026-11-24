@@ -1,6 +1,7 @@
 import { getAdapter } from "../adapter/registry.ts";
 import type { OrderModification, PositionModification } from "../adapter/types.ts";
 import { uid } from "../lib/uid.ts";
+import {drawingGroupsSchema} from "../lib/indicator-sdk/chart-backup-schema";
 import type { DrawingLine } from "../pages/trading/constants.ts";
 import type { AccountMetricsResponse } from "./api/auth.ts";
 import type {
@@ -83,7 +84,10 @@ async function writeJSON(key: string, value: unknown): Promise<void> {
 const DRAW_KEY = (symbol: string) => `oc_drawings_${symbol}`;
 const JOURNAL_KEY = "oc_journal_entries";
 
+const DRAW_INDEX="oc_drawings_index";
 const chartDrawings = {
+  exportAll: async () => {const storage=getAdapter().storage;if(!storage)throw new Error("Drawing storage unavailable");const index=JSON.parse(await storage.get(DRAW_INDEX)??"[]") as string[];const symbols=await api.getSymbols();const names=[...new Set([...index,...symbols.map(s=>s.name)])];const groups=await Promise.all(names.map(async symbol=>({symbol,drawings:JSON.parse(await storage.get(DRAW_KEY(symbol))??"[]")})));return drawingGroupsSchema.parse(groups.filter(g=>Array.isArray(g.drawings)&&g.drawings.length));},
+  importAll: async (raw:unknown) => {const groups=drawingGroupsSchema.parse(raw);const storage=getAdapter().storage;if(!storage)throw new Error("Drawing storage unavailable");const previous=new Map<string,string|null>();const index=JSON.parse(await storage.get(DRAW_INDEX)??"[]") as string[];const keys=[DRAW_INDEX,...groups.map(g=>DRAW_KEY(g.symbol))];for(const key of keys)previous.set(key,await storage.get(key));try{for(const g of groups){const old=drawingGroupsSchema.parse([{symbol:g.symbol,drawings:JSON.parse(previous.get(DRAW_KEY(g.symbol))??"[]")}])[0]!.drawings;const merged=new Map(old.map(d=>[d.id,d]));for(const d of g.drawings)merged.set(d.id,d);await storage.set(DRAW_KEY(g.symbol),JSON.stringify([...merged.values()]));}await storage.set(DRAW_INDEX,JSON.stringify([...new Set([...index,...groups.map(g=>g.symbol)])]));}catch(e){for(const [key,value] of previous){if(value===null)await storage.remove(key);else await storage.set(key,value);}throw e;}return async()=>{for(const [key,value] of previous){if(value===null)await storage.remove(key);else await storage.set(key,value);}};},
   list: async (symbol: string): Promise<DrawingLine[]> => {
     const list = await readJSON<DrawingLine[]>(DRAW_KEY(symbol), []);
     return Array.isArray(list) ? list : [];
@@ -92,6 +96,7 @@ const chartDrawings = {
     const list = (await chartDrawings.list(symbol)).filter((d) => d.id !== drawing.id);
     list.push(drawing);
     await writeJSON(DRAW_KEY(symbol), list);
+    const index=await readJSON<string[]>(DRAW_INDEX,[]);await writeJSON(DRAW_INDEX,[...new Set([...index,symbol])]);
     return { saved: true };
   },
   remove: async (drawingId: string) => {

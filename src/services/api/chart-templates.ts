@@ -1,3 +1,4 @@
+import {templatesBackupSchema} from "../../lib/indicator-sdk/chart-backup-schema";
 import { safeStorage } from "../../lib/safe-storage.ts";
 // Chart templates persist to localStorage in demo mode (no backend).
 
@@ -35,6 +36,8 @@ function writeAll(list: ChartTemplate[]): void {
 
 export const chartTemplatesApi = {
   list: () => Promise.resolve(readAll()),
+  exportAll:()=>templatesBackupSchema.parse(readAll()),
+  importAll:(raw:unknown)=>{const rows=templatesBackupSchema.parse(raw);const previous=readAll();const merged=new Map(previous.map(t=>[t.name,t]));for(const row of rows)merged.set(row.name,row);const next=templatesBackupSchema.parse([...merged.values()]);if(!safeStorage.setJSON(KEY,next))throw new Error("Could not persist templates");return ()=>{if(!safeStorage.setJSON(KEY,previous))throw new Error("Could not roll back templates");};},
 
   /** Upserts by name (unique per user). */
   save: (name: string, content: ChartTemplateContent, isDefault = false) => {

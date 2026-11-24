@@ -60,3 +60,6 @@ The expression whitelist now includes trigonometric functions, sign, log10 and r
 
 ## M05 independent lower panes
 Lightweight Charts 4 remains installed. Native RSI, MACD, ATR and STOCH are grouped in separate chart instances with independent right-hand scales; custom math indicators may select a lower pane and a height of 80–320px. Each child chart uses the parent candle timeline and synchronizes visible logical ranges in both directions. Panes are removed when unused and disposed with their chart. Price overlays and drawing primitives remain on the parent. Crosshair synchronization and visual alignment require local verification.
+
+## M10 workspace backup
+Version 2 optionally includes saved chart templates and adapter-persisted drawings grouped by symbol. Version 1 remains accepted. Restore merges template names and drawing IDs, preserving unrelated records. All sections are validated before writes. Native adapter storage does not provide transactions, so failed restores attempt compensating rollback and report incomplete rollback. Export covers currently listed symbols and the persisted drawing index; unsaved secondary-chart drawings are not included. Wallet, account credentials, journal and orders are excluded. Local validation pending.
