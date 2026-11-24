@@ -312,13 +312,17 @@ export function useIndicators(
   useEffect(()=>{const chart=chartRef.current;const seriesMap=indicatorSeriesRef.current;const cache=cacheRef.current;const guard=guardRef.current;const signatures=signaturesRef.current;return()=>{if(chart)for(const series of seriesMap.values()){try{chart.removeSeries(series);}catch{/* disposed */}}seriesMap.clear();cache.clear();guard.reset();signatures.clear();workerRef.current?.stop();workerRef.current=null;};},[chartEpoch,chartRef]);
 
   const replaySlice=isReplaying?chartData:undefined;
+  const [sessionHistory,setSessionHistory]=useState<{key:string;rows:CandleData[];step:number}>({key:"",rows:[],step:60});
+  const needsSessionHistory=library.some(x=>allowedCustom.includes(`custom:${x.id}`)&&resolveIndicator(x,overrides).kind==="session-candle"&&resolveIndicator(x,overrides).historySource==="independent");
+  const sessionKey=JSON.stringify([symbol,isReplaying,replayCutoff]);
+  useEffect(()=>{if(!needsSessionHistory||!symbol)return;let disposed=false;let busy=false;const refresh=async()=>{if(busy)return;busy=true;try{const cutoff=isReplaying?replayCutoff:Math.floor(Date.now()/1000);if(!cutoff)return;const step=60;const rows=await api.getCandles(symbol,"1m",Math.min(admin.maxBars,5000),{toMs:cutoff*1000});if(!disposed)setSessionHistory({key:sessionKey,rows:rows.filter(x=>x.time+step<=cutoff).sort((a,b)=>a.time-b.time),step});}catch{if(!disposed)setSessionHistory({key:sessionKey,rows:[],step:60});}finally{busy=false;}};void refresh();const timer=isReplaying?undefined:setInterval(()=>void refresh(),30000);return()=>{disposed=true;if(timer!==undefined)clearInterval(timer);};},[needsSessionHistory,symbol,isReplaying,replayCutoff,sessionKey,admin.maxBars]);
   useEffect(() => {
     const series = candleSeriesRef.current;
     if (!series) return;
     const allowed=activeIndicators.filter(x=>x.startsWith("custom:")).slice(0,admin.maxActive);
-    const primitives = library.filter(x => allowed.includes(`custom:${x.id}`)).flatMap(x => {const entry=resolveIndicator(x,overrides);if(!entry.visible)return [];const items:import("lightweight-charts").ISeriesPrimitive<Time>[]=[];if(entry.kind==="session-candle")items.push(new SessionCandlePrimitive(entry,sourceSeconds,admin.maxBars,replaySlice));if(entry.graphics.length)items.push(new GraphicPrimitive(entry.graphics,replaySlice));return items;});
+    const primitives = library.filter(x => allowed.includes(`custom:${x.id}`)).flatMap(x => {const entry=resolveIndicator(x,overrides);if(!entry.visible)return [];const items:import("lightweight-charts").ISeriesPrimitive<Time>[]=[];if(entry.kind==="session-candle")items.push(new SessionCandlePrimitive(entry,sourceSeconds,admin.maxBars,replaySlice,entry.historySource==="independent"?(sessionHistory.key===sessionKey?sessionHistory.rows:[]):undefined,sessionHistory.step));if(entry.graphics.length)items.push(new GraphicPrimitive(entry.graphics,replaySlice));return items;});
     const attached:typeof primitives=[];
     for (const primitive of primitives) {try{series.attachPrimitive(primitive);attached.push(primitive);}catch(e){console.warn("Indicator attachment failed",e);}}
     return () => { for (const primitive of attached) { try { series.detachPrimitive(primitive); } catch { /* disposed chart */ } } };
-  }, [activeIndicators, library, overrides, admin, sourceSeconds, chartEpoch, isReplaying, replaySlice]);
+  }, [activeIndicators, library, overrides, admin, sourceSeconds, chartEpoch, isReplaying, replaySlice,sessionHistory,sessionKey]);
 }

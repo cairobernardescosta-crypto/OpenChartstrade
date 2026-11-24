@@ -51,3 +51,6 @@ Chart-derived HTF values are aligned at confirmed source close, replay graphics 
 
 ## Resource diagnostics
 The worker queue is limited to four requests and each request to 20,000 candles. Cache diagnostics expose retained points and an approximate 64-byte-per-point budget estimate; this is not measured browser heap usage or a hard process memory limit. A browser Worker cannot enforce an independent absolute heap quota.
+
+## Session extensions
+Weekly and monthly civil-period options and a 24/7 UTC convention are available. The latter is not an official exchange calendar or underlying commodity schedule. Independent session history currently requests up to 5,000 closed one-minute bars, so long periods may be incomplete and intentionally hidden. Local validation and further long-history integration remain pending.

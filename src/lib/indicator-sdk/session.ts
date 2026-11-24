@@ -30,6 +30,7 @@ const minutes = (s: string) => Number(s.slice(0,2))*60+Number(s.slice(3));
 export function sessionRange(candles: readonly CandleData[], config: ImportedIndicator, sourceSeconds?:number,clockSeconds?:number): SessionRange | null {
   const last = candles[candles.length-1];
   if (!last || !Number.isFinite(last.time)) return null;
+  if(config.sessionSchedule==="utc-24h")config={...config,timezone:"UTC",open:"00:00",close:"00:00",days:[0,1,2,3,4,5,6]};
   const fmt = new Intl.DateTimeFormat("en-GB", {timeZone:config.timezone, year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"});
   const cursor=clockSeconds===undefined?last.time:Math.max(last.time,clockSeconds);
   const now = parts(cursor*1000, fmt);
@@ -39,9 +40,12 @@ export function sessionRange(candles: readonly CandleData[], config: ImportedInd
   let eligible=false;
   for(let i=0;i<7;i++,day--){if(config.days.includes(new Date(day*86400000).getUTCDay())){eligible=true;break;}}
   if(!eligible)return null;
-  const start = civilTime(day,o,fmt), end = civilTime(day+(c<=o?1:0),c,fmt);
+  let endDay=day+(c<=o?1:0);
+  if(config.sessionMinutes==="week"){const weekday=new Date(day*86400000).getUTCDay();day-=(weekday+6)%7;endDay=day+7;}else if(config.sessionMinutes==="month"){const date=new Date(day*86400000);day=Date.UTC(date.getUTCFullYear(),date.getUTCMonth(),1)/86400000;endDay=Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+1,1)/86400000;}
+  const calendar=config.sessionMinutes==="week"||config.sessionMinutes==="month";
+  const start = civilTime(day,o,fmt), end = civilTime(endDay,calendar?o:c,fmt);
   if (start === null || end === null || end<=start) return null;
-  const duration=config.sessionMinutes==="session"?0:Number(config.sessionMinutes)*60;
+  const duration=config.sessionMinutes==="session"||calendar?0:Number(config.sessionMinutes)*60;
   const segment=duration?Math.max(0,Math.floor((Math.min(cursor,end-1)-start)/duration)):0;
   const rangeStart=start+segment*duration;
   const rangeEnd=duration?Math.min(end,rangeStart+duration):end;
@@ -64,5 +68,5 @@ export function sessionRange(candles: readonly CandleData[], config: ImportedInd
   return out;
 }
 
-export function sessionPeriodLabel(config:Pick<ImportedIndicator,"sessionMinutes">){const n=Number(config.sessionMinutes);return config.sessionMinutes==="session"?"1D":n<60?n+"m":n/60+"H";}
+export function sessionPeriodLabel(config:Pick<ImportedIndicator,"sessionMinutes">){const n=Number(config.sessionMinutes);return config.sessionMinutes==="week"?"1W":config.sessionMinutes==="month"?"1M":config.sessionMinutes==="session"?"1D":n<60?n+"m":n/60+"H";}
 export function projectedCandleX(lastX:number,step:number,offset:number,width:number,viewport:number,closeX:number|null){const limit=Math.min(viewport-width/2-5,closeX===null?Infinity:closeX-width/2-2);const x=Math.min(lastX+step*offset,limit);return x>lastX+width/2?x:null;}

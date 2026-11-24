@@ -9,7 +9,7 @@ export class SessionCandlePrimitive extends PluginBase {
   private range: SessionRange|null=null;
   private timer:ReturnType<typeof setInterval>|undefined;
   private readonly view: ISeriesPrimitivePaneView;
-  constructor(private readonly config:ImportedIndicator,private readonly sourceSeconds=60,private readonly maxBars=5000,private readonly replayData?:readonly import("lightweight-charts").CandlestickData<Time>[]) {
+  constructor(private readonly config:ImportedIndicator,private readonly sourceSeconds=60,private readonly maxBars=5000,private readonly replayData?:readonly import("lightweight-charts").CandlestickData<Time>[],private readonly independentData?:readonly CandleData[],private readonly independentSeconds=60) {
     super();
     this.view={renderer:()=>({draw:(target:CanvasRenderingTarget2D)=>this.draw(target)} satisfies ISeriesPrimitivePaneRenderer)};
   }
@@ -17,8 +17,8 @@ export class SessionCandlePrimitive extends PluginBase {
   public override detached(){if(this.timer!==undefined)clearInterval(this.timer);this.timer=undefined;super.detached();}
   protected override dataUpdated(_scope:DataChangedScope) {this.refresh();}
   private refresh() {
-    const candles:CandleData[]=(this.replayData??this.series.data()).slice(-this.maxBars).flatMap(x=>typeof x.time==="number" && "open" in x && "close" in x && "high" in x && "low" in x ? [{time:x.time,open:x.open,high:x.high,low:x.low,close:x.close}] : []);
-    this.range=sessionRange(candles,this.config,this.sourceSeconds,this.replayData?undefined:Math.floor(Date.now()/1000));
+    const candles:CandleData[]=this.independentData?[...this.independentData]:(this.replayData??this.series.data()).slice(-this.maxBars).flatMap(x=>typeof x.time==="number" && "open" in x && "close" in x && "high" in x && "low" in x ? [{time:x.time,open:x.open,high:x.high,low:x.low,close:x.close}] : []);
+    this.range=sessionRange(candles,this.config,this.independentData?this.independentSeconds:this.sourceSeconds,this.replayData?(typeof this.replayData[this.replayData.length-1]?.time==="number"?Number(this.replayData[this.replayData.length-1]!.time):undefined):Math.floor(Date.now()/1000));
     this.requestUpdate();
   }
   paneViews():readonly ISeriesPrimitivePaneView[]{return [this.view];}
