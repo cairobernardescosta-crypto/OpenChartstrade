@@ -14,6 +14,8 @@ import {
   type IndicatorType,
 } from "../../lib/indicators.ts";
 import { toIndicatorCandles } from "./utils.ts";
+import { useIndicatorLibrary } from "../../lib/indicator-sdk/storage";
+import { SessionCandlePrimitive } from "../../lib/indicator-sdk/renderer";
 import { CHART_COLORS } from "./constants.ts";
 
 export function useIndicators(
@@ -26,6 +28,7 @@ export function useIndicators(
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<"Line"> | ISeriesApi<"Histogram">>>(
     new Map(),
   );
+  const library = useIndicatorLibrary();
   const colors = isDark ? CHART_COLORS.dark : CHART_COLORS.light;
 
   useEffect(() => {
@@ -45,6 +48,16 @@ export function useIndicators(
     indicatorSeriesRef.current.clear();
 
     for (const type of activeIndicators) {
+      if (type.startsWith("custom:")) {
+        const entry = library.find(x => `custom:${x.id}` === type);
+        if (entry && entry.kind !== "session-candle") {
+          const data = (entry.kind === "sma" ? sma : ema)(indCandles, entry.period);
+          const s = chart.addLineSeries({ color: entry.color, lineWidth: 1, priceScaleId: "right" });
+          s.setData(data.map(p => ({ time: p.time as Time, value: p.value })));
+          indicatorSeriesRef.current.set(type, s);
+        }
+        continue;
+      }
       const config = INDICATOR_REGISTRY.find((r) => r.type === type);
       if (!config) continue;
 
@@ -200,5 +213,13 @@ export function useIndicators(
     }
     // chartRef/candleSeriesRef are stable refs; colors derived from isDark dep.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIndicators, chartData, isDark]);
+  }, [activeIndicators, chartData, isDark, library]);
+
+  useEffect(() => {
+    const series = candleSeriesRef.current;
+    if (!series) return;
+    const primitives = library.filter(x => x.kind === "session-candle" && activeIndicators.includes(`custom:${x.id}`)).map(x => new SessionCandlePrimitive(x));
+    for (const primitive of primitives) series.attachPrimitive(primitive);
+    return () => { for (const primitive of primitives) { try { series.detachPrimitive(primitive); } catch { /* disposed chart */ } } };
+  }, [activeIndicators, library, chartData.length === 0]);
 }

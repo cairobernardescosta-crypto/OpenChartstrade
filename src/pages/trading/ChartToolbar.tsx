@@ -38,6 +38,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { IndicatorLibraryMenu } from "./indicators/IndicatorLibraryMenu";
 import { INDICATOR_REGISTRY, type IndicatorType } from "../../lib/indicators.ts";
 import { cn, formatNumber } from "../../lib/utils.ts";
 import {
@@ -407,6 +408,7 @@ export function ChartToolbar({
 
           {showIndicatorMenu && (
             <div className="absolute top-full left-0 z-50 mt-1 w-64 bg-card border border-border rounded-lg shadow-xl p-2 space-y-0.5">
+              <IndicatorLibraryMenu active={activeIndicators} toggle={onToggleIndicator} />
               {INDICATOR_REGISTRY.map((ind) => (
                 <button
                   key={ind.type}
