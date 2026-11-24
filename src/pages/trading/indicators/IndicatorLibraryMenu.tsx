@@ -1,11 +1,17 @@
 import { useState } from "react";
-import { useOverrides, saveOverride, resetOverride, clearOverrides, resolveIndicator, type ChartScope } from "../../../lib/indicator-sdk/instances";
+import {IndicatorPreview} from "./IndicatorPreview";
+import {useIndicatorAdmin,saveIndicatorAdmin} from "../../../lib/indicator-sdk/admin";
+import {persistenceError} from "../../../lib/indicator-sdk/database";
+import { useOverrides, saveOverride, resetOverride, clearOverrides, resolveIndicator, exportOverrides, restoreOverrides, type ChartScope } from "../../../lib/indicator-sdk/instances";
 import type { IndicatorType } from "../../../lib/indicators";
 import { HTF_EXAMPLE, parseIndicator, indicatorSchema, type ImportedIndicator } from "../../../lib/indicator-sdk/schema";
-import { useIndicatorLibrary, installIndicator, updateIndicator, removeIndicator, duplicateIndicator, versions, exportLibrary, restoreLibrary, getLibraryError } from "../../../lib/indicator-sdk/storage";
+import { useIndicatorLibrary, installIndicator, updateIndicator, removeIndicator, duplicateIndicator, versions, exportLibrary, restoreLibrary, getLibraryError, recoverLibraryMirror } from "../../../lib/indicator-sdk/storage";
 
 export function IndicatorLibraryMenu({active,toggle,scope="primary"}:{active: IndicatorType[];toggle:(type:IndicatorType)=>void;scope?:ChartScope}) {
   const library=useIndicatorLibrary();
+  const admin=useIndicatorAdmin();
+  const [showAdmin,setShowAdmin]=useState(false);
+  const [overrideText,setOverrideText]=useState("");
   const overrides=useOverrides(scope);
   const [localEdit,setLocalEdit]=useState(false);
   const [source,setSource]=useState("");
@@ -24,11 +30,15 @@ export function IndicatorLibraryMenu({active,toggle,scope="primary"}:{active: In
       <textarea aria-label="Indicator source" className="w-full h-24 bg-background border border-border rounded p-1 text-xs font-mono" value={source} onChange={e=>setSource(e.target.value)} placeholder="export default {...}" maxLength={65536}/>
       <div className="flex gap-2 text-xs"><button onClick={()=>setSource("export default "+HTF_EXAMPLE+";")}>HTF example</button><button onClick={()=>attempt(()=>{setLocalEdit(false);setDraft(parseIndicator(source));})}>Preview</button></div>
     </div>}
-    <div className="flex gap-2 text-xs"><button onClick={()=>setFavorites(v=>!v)} aria-pressed={favorites}>★ Favorites</button><button onClick={()=>{setBackupText(exportLibrary());setBackup(v=>!v);}}>Backup</button></div>
+    <div className="flex gap-2 text-xs"><button onClick={()=>setFavorites(v=>!v)} aria-pressed={favorites}>★ Favorites</button><button onClick={()=>{setBackupText(exportLibrary());setOverrideText(exportOverrides());setBackup(v=>!v);}}>Backup</button></div>
     {backup && <div className="space-y-1"><textarea aria-label="Library backup" className="w-full h-24 bg-background border border-border text-xs" value={backupText} onChange={e=>setBackupText(e.target.value)}/><button onClick={()=>attempt(()=>{if(window.confirm("Replace indicator library?"))restoreLibrary(backupText);})}>Restore library</button></div>}
+    <button className="text-xs" onClick={()=>setShowAdmin(v=>!v)}>Administration</button>
+    {showAdmin&&<div className="space-y-2 border border-border rounded p-2 text-xs"><label className="block">Maximum imported indicators <input type="number" min={1} max={30} value={admin.maxActive} onChange={e=>attempt(()=>saveIndicatorAdmin({...admin,maxActive:Number(e.target.value)}))}/></label><label className="block">Maximum historical bars <input type="number" min={100} max={20000} step={100} value={admin.maxBars} onChange={e=>attempt(()=>saveIndicatorAdmin({...admin,maxBars:Number(e.target.value)}))}/></label><p>SDK 1 · {library.length} definitions · {active.filter(x=>x.startsWith("custom:")).length} active</p><p>Executable code, wallet and network access: blocked</p><p>{persistenceError()||"IndexedDB mirror: no recorded write error"}</p><button onClick={()=>{if(window.confirm("Recover library from IndexedDB mirror?"))void recoverLibraryMirror().catch(e=>setError(String(e)));}}>Recover mirror</button></div>}
+    {backup&&<div className="space-y-1"><textarea aria-label="Chart settings backup" className="w-full h-20 bg-background border border-border text-xs" value={overrideText} onChange={e=>setOverrideText(e.target.value)}/><button onClick={()=>attempt(()=>{if(window.confirm("Replace chart indicator settings?"))restoreOverrides(overrideText);})}>Restore chart settings</button></div>}
     {getLibraryError() && <p role="alert" className="text-xs">Stored library could not be loaded.</p>}
     {draft && <div className="border border-border rounded p-2 text-xs space-y-2">
       <div className="font-semibold">{draft.name} · {draft.version}</div>
+      <IndicatorPreview draft={draft}/><p className="text-muted-foreground">Illustrative preview · sample data</p>
       <div>{draft.kind} · {localEdit?scope+" chart":"library definition"}</div><label>Name <input className="w-full bg-background border border-border" value={draft.name} onChange={e=>setDraft({...draft,name:e.target.value})}/></label>
       {draft.kind==="expression" && <label>Formula (OHLCV arithmetic)<input className="w-full bg-background border border-border" value={draft.expression} onChange={e=>setDraft({...draft,expression:e.target.value})}/></label>}
       {draft.kind==="session-candle" ? <><label className="block">Opening <input type="time" className="bg-background" value={draft.open} onChange={e=>setDraft({...draft,open:e.target.value})}/></label><label className="block">Closing <input type="time" className="bg-background" value={draft.close} onChange={e=>setDraft({...draft,close:e.target.value})}/></label><label className="block">Time zone <input className="w-full bg-background border border-border" value={draft.timezone} onChange={e=>setDraft({...draft,timezone:e.target.value})}/></label></>:<label>Period <input type="number" min={1} max={5000} className="w-20 bg-background" value={draft.period} onChange={e=>setDraft({...draft,period:Number(e.target.value)})}/></label>}
@@ -41,7 +51,7 @@ export function IndicatorLibraryMenu({active,toggle,scope="primary"}:{active: In
     {library.filter(x=>(!favorites||x.favorite)&&x.name.toLowerCase().includes(query.toLowerCase())).map(x=>{
       const id:IndicatorType=`custom:${x.id}`;
       return <div key={x.id} className="flex gap-2 items-center text-xs px-1">
-        <button className="flex-1 text-left truncate" aria-pressed={active.includes(id)} onClick={()=>toggle(id)}>{active.includes(id)?"✓ ":"+ "}{x.name}</button>
+        <button className="flex-1 text-left truncate" aria-pressed={active.includes(id)} onClick={()=>attempt(()=>{if(!active.includes(id)&&active.filter(x=>x.startsWith("custom:")).length>=admin.maxActive)throw new Error("Active indicator limit reached");toggle(id);})}>{active.includes(id)?"✓ ":"+ "}{x.name}</button>
         <button aria-label={"Favorite "+x.name} onClick={()=>attempt(()=>updateIndicator({...x,favorite:!x.favorite}))}>{x.favorite?"★":"☆"}</button>
         <button aria-label={"Duplicate "+x.name} onClick={()=>attempt(()=>duplicateIndicator(x.id))}>Copy</button>
         {versions(x.id).length>0 && <button aria-label={"Restore previous version of "+x.name} onClick={()=>attempt(()=>{if(window.confirm("Restore previous settings?"))updateIndicator(versions(x.id)[0]!);})}>↶</button>}

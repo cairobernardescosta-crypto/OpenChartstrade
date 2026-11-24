@@ -15,6 +15,7 @@ import {
 } from "../../lib/indicators.ts";
 import { toIndicatorCandles } from "./utils.ts";
 import { useOverrides, resolveIndicator, type ChartScope } from "../../lib/indicator-sdk/instances";
+import {useIndicatorAdmin} from "../../lib/indicator-sdk/admin";
 import { expressionPoints } from "../../lib/indicator-sdk/expression";
 import { useIndicatorLibrary } from "../../lib/indicator-sdk/storage";
 import { SessionCandlePrimitive } from "../../lib/indicator-sdk/renderer";
@@ -33,6 +34,7 @@ export function useIndicators(
     new Map(),
   );
   const library = useIndicatorLibrary();
+  const admin = useIndicatorAdmin();
   const overrides = useOverrides(scope);
   const colors = isDark ? CHART_COLORS.dark : CHART_COLORS.light;
 
@@ -52,12 +54,15 @@ export function useIndicators(
     }
     indicatorSeriesRef.current.clear();
 
+    let importedCount=0;
     for (const type of activeIndicators) {
       if (type.startsWith("custom:")) {
+        if(++importedCount>admin.maxActive)continue;
         const definition = library.find(x => `custom:${x.id}` === type);
         const entry = definition && resolveIndicator(definition,overrides);
         if (entry && entry.kind !== "session-candle") {
-          const data = entry.kind === "expression" ? expressionPoints(indCandles,entry.expression) : (entry.kind === "sma" ? sma : ema)(indCandles, entry.period);
+          const bounded=indCandles.slice(-admin.maxBars);
+          const data = entry.kind === "expression" ? expressionPoints(bounded,entry.expression) : (entry.kind === "sma" ? sma : ema)(bounded, entry.period);
           const s = chart.addLineSeries({ color: entry.color, lineWidth: 1, priceScaleId: "right" });
           s.setData(data.map(p => ({ time: p.time as Time, value: p.value })));
           indicatorSeriesRef.current.set(type, s);
@@ -219,13 +224,14 @@ export function useIndicators(
     }
     // chartRef/candleSeriesRef are stable refs; colors derived from isDark dep.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIndicators, chartData, isDark, library, volumeData, overrides]);
+  }, [activeIndicators, chartData, isDark, library, volumeData, overrides, admin]);
 
   useEffect(() => {
     const series = candleSeriesRef.current;
     if (!series) return;
-    const primitives = library.filter(x => x.kind === "session-candle" && activeIndicators.includes(`custom:${x.id}`)).map(x => new SessionCandlePrimitive(resolveIndicator(x,overrides)));
+    const allowed=activeIndicators.filter(x=>x.startsWith("custom:")).slice(0,admin.maxActive);
+    const primitives = library.filter(x => x.kind === "session-candle" && allowed.includes(`custom:${x.id}`)).map(x => new SessionCandlePrimitive(resolveIndicator(x,overrides)));
     for (const primitive of primitives) series.attachPrimitive(primitive);
     return () => { for (const primitive of primitives) { try { series.detachPrimitive(primitive); } catch { /* disposed chart */ } } };
-  }, [activeIndicators, library, overrides, chartData.length === 0]);
+  }, [activeIndicators, library, overrides, admin, chartData.length === 0]);
 }
