@@ -33,17 +33,17 @@ export class SessionCandlePrimitive extends PluginBase {
     const timeX=(t:number)=>{const direct=scale.timeToCoordinate(t as Time);if(direct!==null)return direct;const prev=data[data.length-2];const interval=prev?this.sourceSeconds:0;return interval>0&&typeof last.time==="number"?xLast+(t-last.time)/interval*step:null;};
     target.useMediaCoordinateSpace(({context:ctx,mediaSize})=>{
       const x=Math.min(projectedX,mediaSize.width-this.config.width/2-5);
-      if(x<=xLast)return;
+      const showProjected=x>xLast;
       const line=(x1:number,y1:number,x2:number,y2:number,dash:number[]=[])=>{ctx.setLineDash(dash);ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();};
       ctx.save();ctx.globalAlpha=this.config.opacity;ctx.lineWidth=this.config.lineWidth;ctx.strokeStyle=this.config.lineColor;
       const start=timeX(r.start),end=timeX(r.end),hi=timeX(r.highTime),lo=timeX(r.lowTime);
-      if(start!==null){if(this.config.showOpen)line(start,0,start,mediaSize.height);if(this.config.showOpenPrice)line(start,yO,x,yO,[6,4]);}
+      if(start!==null){if(this.config.showOpen)line(start,0,start,mediaSize.height);if(this.config.showOpenPrice)line(start,yO,showProjected?x:mediaSize.width,yO,[6,4]);}
       if(this.config.showClose&&end!==null)line(end,0,end,mediaSize.height);
-      if(this.config.showHighLow){if(hi!==null)line(hi,yH,x,yH);if(lo!==null)line(lo,yL,x,yL);}
+      if(this.config.showHighLow&&showProjected){if(hi!==null)line(hi,yH,x,yH);if(lo!==null)line(lo,yL,x,yL);}
       ctx.strokeStyle=r.close>=r.open?this.config.color:this.config.downColor;ctx.fillStyle=ctx.strokeStyle;
-      if(this.config.showCandle&&this.config.showWicks)line(x,yH,x,yL);
-      if(this.config.showCandle)ctx.fillRect(x-this.config.width/2,Math.min(yO,yC),this.config.width,Math.max(1,Math.abs(yO-yC)));
-      if(this.config.showLabels){ctx.font="11px sans-serif";ctx.textAlign="center";ctx.fillText("1D",x,yH-7);ctx.fillText("1D",x,yL+14);}ctx.restore();
+      if(showProjected&&this.config.showCandle&&this.config.showWicks)line(x,yH,x,yL);
+      if(showProjected&&this.config.showCandle)ctx.fillRect(x-this.config.width/2,Math.min(yO,yC),this.config.width,Math.max(1,Math.abs(yO-yC)));
+      if(showProjected&&this.config.showLabels){const label=this.config.sessionMinutes==="session"?"1D":Number(this.config.sessionMinutes)<60?this.config.sessionMinutes+"m":Number(this.config.sessionMinutes)/60+"H";ctx.font="11px sans-serif";ctx.textAlign="center";ctx.fillText(label,x,yH-7);ctx.fillText(label,x,yL+14);}ctx.restore();
     });
   }
 }

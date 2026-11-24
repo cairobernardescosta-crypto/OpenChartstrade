@@ -36,11 +36,15 @@ export function sessionRange(candles: readonly CandleData[], config: ImportedInd
   if (!config.days.includes(new Date(day*86400000).getUTCDay())) return null;
   const start = civilTime(day,o,fmt), end = civilTime(day+(c<=o?1:0),c,fmt);
   if (start === null || end === null) return null;
+  const duration=config.sessionMinutes==="session"?0:Number(config.sessionMinutes)*60;
+  const segment=duration?Math.max(0,Math.floor((Math.min(last.time,end-1)-start)/duration)):0;
+  const rangeStart=start+segment*duration;
+  const rangeEnd=duration?Math.min(end,rangeStart+duration):end;
   let out: SessionRange | null = null;
   for (const bar of candles) {
-    if (bar.time < start || bar.time >= end) continue;
+    if (bar.time < rangeStart || bar.time >= rangeEnd) continue;
     if (![bar.open,bar.high,bar.low,bar.close].every(Number.isFinite)) continue;
-    if (!out) out = {start,end,open:bar.open,high:bar.high,low:bar.low,close:bar.close,highTime:bar.time,lowTime:bar.time};
+    if (!out) out = {start:rangeStart,end:rangeEnd,open:bar.open,high:bar.high,low:bar.low,close:bar.close,highTime:bar.time,lowTime:bar.time};
     else {
       if (bar.high>out.high) {out.high=bar.high;out.highTime=bar.time;}
       if (bar.low<out.low) {out.low=bar.low;out.lowTime=bar.time;}

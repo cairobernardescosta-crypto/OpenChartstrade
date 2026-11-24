@@ -21,3 +21,6 @@ IndexedDB records are read on startup, validated and migrated from the compatibi
 
 ## Parameter and plot increment
 Bounded expression functions abs/sqrt/log/exp/floor/ceil/round and up to 20 named numeric parameters (p_ prefix) are interpreted without JavaScript execution. Custom math can render as line, area or histogram. Category and active filters and per-chart visibility are available. True separate panes and arbitrary TypeScript remain unsupported. Tests added, not run.
+
+## Calendar and session periods
+Weekly aggregation aligns to Monday UTC; calendar month aggregation uses actual month length, excludes incomplete or gapped buckets, and is computed from loaded chart history. HTF session candles support full session or session-relative intraday segments. Session lines remain visible even when projected candle has no viewport space. Independent external timeframe fetching remains unsupported.

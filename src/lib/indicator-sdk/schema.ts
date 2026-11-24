@@ -24,6 +24,7 @@ export const indicatorSchema = z.object({
   author: z.string().max(80).default(""),
   opacity: z.number().min(0.1).max(1).default(1),
   days: z.array(z.number().int().min(0).max(6)).max(7).default([0,1,2,3,4,5,6]),
+  sessionMinutes:z.enum(["session","15","30","60","120","240","360","720"]).default("session"),
   showWicks: z.boolean().default(true),
   showLabels: z.boolean().default(true),
   showOpenPrice: z.boolean().default(true),
