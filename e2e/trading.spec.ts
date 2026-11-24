@@ -11,7 +11,7 @@ async function readyOnEur(page: Page, hl: Harness): Promise<void> {
   await waitForTerminal(page);
   await selectSymbol(page, "xyz:EUR");
   await connectAndSetup(page, hl);
-  await expect(page.getByRole("button", { name: /^(Buy|Sell)\b/ }).filter({ visible: true }).last()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^(Buy|Sell)\\b/ }).filter({ visible: true }).last()).toBeVisible();
 }
 
 function expectBuilderOnEveryOrder(hl: Harness): void {
@@ -84,7 +84,15 @@ test.describe("trading a HIP-3 Forex market (xyz:EUR)", () => {
     await submitOrder(page, "Buy");
     await expect.poll(() => hl.fake.position("xyz:EUR")?.szi).toBe(10);
 
-    await page.getByRole("button", { name: /^Close$/ }).filter({ visible: true }).first().click();
+    // The positions table lives inside the intentionally collapsed bottom panel.
+    // Hover it and wait for the 600 ms expansion before locating/clicking Close.
+    const bottomPanel = page.getByRole("group", { name: "Painel inferior retrátil" });
+    await bottomPanel.hover();
+    await expect(bottomPanel).toHaveAttribute("aria-expanded", "true");
+    const closeButton = bottomPanel.getByRole("button", { name: /^Close$/ });
+    await expect(closeButton).toBeVisible();
+    await closeButton.click();
+
     // A confirmation may be shown before closing.
     const confirm = page.getByRole("button", { name: /^(Confirm|Close position|Yes)/ }).filter({ visible: true });
     if (await confirm.first().isVisible().catch(() => false)) await confirm.first().click();
@@ -101,7 +109,7 @@ test.describe("trading a HIP-3 Forex market (xyz:EUR)", () => {
     await readyOnEur(page, hl);
     await setSize(page, "5"); // 5 EUR = $5.75 < $10
     await expect(page.getByTestId("size-help")).toContainText(/minimum/i);
-    await expect(page.getByRole("button", { name: /^Buy\b/ }).filter({ visible: true }).last()).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^Buy\\b/ }).filter({ visible: true }).last()).toBeDisabled();
     expect(hl.fake.orderActions()).toHaveLength(0);
   });
 });
