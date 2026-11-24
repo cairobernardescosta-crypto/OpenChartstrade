@@ -1,0 +1,24 @@
+import {useId,type ReactNode} from "react";
+import type {CandleData} from "../../../lib/indicators";
+import type {Graphic} from "../../../lib/indicator-sdk/graphics";
+import {graphicPrice,graphicOffsetVisible,graphicOffsets} from "../../../lib/indicator-sdk/graphic-preview";
+type Point={x:number;y:number};
+export function GraphicPreview({rows,graphics,replay=false}:{rows:readonly CandleData[];graphics:readonly Graphic[];replay?:boolean}){
+ const clip=useId();const visible=graphics.filter(g=>g.visible);if(!rows.length)return <p>Sem velas para posicionar os objetos.</p>;
+ const candidates=visible.filter(g=>graphicOffsets(g).every(b=>graphicOffsetVisible(b,rows.length,replay)));
+ const left=Math.min(-Math.min(rows.length-1,59),...candidates.flatMap(graphicOffsets)),right=Math.max(replay?0:5,...candidates.flatMap(graphicOffsets));const span=Math.max(1,right-left);
+ const price=(g:Graphic,bars:number,value:number)=>graphicPrice(rows,bars,value,g.anchor,g.priceMultiplier);
+ const prices=(g:Graphic): (number|null)[]=>{switch(g.type){case "horizontal":return [price(g,0,g.price)];case "vertical":return [];case "candle":return [g.open,g.high,g.low,g.close].map(v=>price(g,g.bars,v));case "text":case "table":return [price(g,g.at.bars,g.at.price)];default:return [price(g,g.from.bars,g.from.price),price(g,g.to.bars,g.to.price)];}};
+ const valid=candidates.filter(g=>prices(g).every(v=>v!==null));
+ const bars=rows.slice(Math.max(0,rows.length-1+left));const values=bars.flatMap(b=>[b.high,b.low]).concat(valid.flatMap(g=>prices(g).filter((v):v is number=>v!==null)));const lo=Math.min(...values),hi=Math.max(...values);const margin=Math.max((hi-lo)*0.08,Math.abs(hi)*0.0001,0.000001);const low=lo-margin,high=hi+margin;
+ const x=(b:number)=>12+(b-left)/span*296;const y=(v:number)=>146-(v-low)/(high-low)*132;
+ const point=(g:Graphic,p:{bars:number;price:number}):Point|null=>{const v=price(g,p.bars,p.price);return v===null?null:{x:x(p.bars),y:y(v)};};
+ const shape=(g:Graphic):ReactNode=>{if(g.type==="horizontal"){const p=price(g,0,g.price);return p===null?null:<line x1="8" x2="312" y1={y(p)} y2={y(p)}/>;}if(g.type==="vertical")return <line x1={x(g.bars)} x2={x(g.bars)} y1="8" y2="150"/>;
+ if(g.type==="candle"){const v=prices(g);if(v.some(p=>p===null))return null;const [o,h,l,c]=v as number[];const a=x(g.bars);return <><line x1={a} x2={a} y1={y(h!)} y2={y(l!)}/><rect x={a-g.bodyWidth/2} y={Math.min(y(o!),y(c!))} width={g.bodyWidth} height={Math.max(1,Math.abs(y(o!)-y(c!)))} fill={g.color}/></>;}
+ if(g.type==="text"||g.type==="table"){const p=point(g,g.at);if(!p)return null;if(g.type==="text")return <text x={p.x} y={p.y} fill={g.color} stroke="none" fontSize="10">{g.text}</text>;return <g>{g.rows.map((row,i)=>row.map((value,j)=><g key={i+":"+j}><rect x={p.x+j*58} y={p.y+i*14} width="58" height="14" fill="none"/><text x={p.x+j*58+3} y={p.y+i*14+10} fontSize="8" fill={g.color} stroke="none">{value.slice(0,12)}</text></g>))}</g>;}
+ const a=point(g,g.from),b=point(g,g.to);if(!a||!b)return null;if(g.type==="box")return <rect x={Math.min(a.x,b.x)} y={Math.min(a.y,b.y)} width={Math.abs(a.x-b.x)} height={Math.abs(a.y-b.y)} fill={g.fill?g.color:"none"}/>;
+ const angle=Math.atan2(b.y-a.y,b.x-a.x);return <><line x1={a.x} y1={a.y} x2={b.x} y2={b.y}/>{g.type==="arrow"&&[-0.5,0.5].map(delta=><line key={delta} x1={b.x} y1={b.y} x2={b.x-9*Math.cos(angle+delta)} y2={b.y-9*Math.sin(angle+delta)}/>)}</>;};
+ const layer=(name:Graphic["layer"])=>valid.filter(g=>g.layer===name).map((g,i)=><g key={g.id??name+i} stroke={g.color} fill="none" opacity={g.opacity} strokeWidth={g.width} strokeDasharray={g.dash==="dashed"?"6 4":g.dash==="dotted"?"2 3":undefined}>{shape(g)}</g>);
+ const stride=Math.max(1,Math.ceil(bars.length/100));const width=Math.max(1,Math.min(5,296/span*0.65));
+ return <div className="space-y-1"><svg viewBox="0 0 320 160" className="w-full rounded border border-border" role="img" aria-label="Prévia de objetos gráficos sobre velas"><defs><clipPath id={clip}><rect x="4" y="4" width="312" height="152"/></clipPath></defs><g clipPath={"url(#"+clip+")"}>{layer("bottom")}{bars.map((b,i)=>{if(i%stride!==0&&i!==bars.length-1)return null;const a=x(i-bars.length+1),color=b.close>=b.open?"#22c55e":"#ef4444";return <g key={b.time} stroke={color}><line x1={a} x2={a} y1={y(b.high)} y2={y(b.low)}/><rect x={a-width/2} y={Math.min(y(b.open),y(b.close))} width={width} height={Math.max(1,Math.abs(y(b.open)-y(b.close)))} fill={color}/></g>;})}{layer("normal")}{layer("top")}</g></svg><p className="text-muted-foreground">{valid.length} de {visible.length} objetos visíveis · {graphics.length-visible.length} ocultos{visible.length!==valid.length?" · "+(visible.length-valid.length)+" sem âncora disponível":""}</p><p className="text-muted-foreground">Escala ajustada à prévia; textos e tabelas podem ser abreviados. {replay?"Projeções futuras bloqueadas no replay.":""}</p></div>;
+}

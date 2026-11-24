@@ -102,3 +102,6 @@ Aviso reutilizável em português com categoria, orientação e detalhes técnic
 
 ## L07 central de backups
 Um painel reúne exportação de espaço de trabalho e indicadores, seleção e validação de arquivos antes da restauração, resumo de conteúdo e confirmação do escopo. Exportações parciais e colagem JSON ficam em opções avançadas. Formatos anteriores preservados. Nomes de arquivos incluem data e hora UTC. Operações parciais mantêm o mecanismo de persistência existente; a confirmação de gravação depende do diagnóstico de armazenamento. Validação local pendente.
+
+## L08 prévias gráficas
+Prévia SVG separada para os oito tipos de objetos, inclusive indicadores matemáticos com gráficos adicionais. Respeita âncoras OHLC, multiplicador, deslocamento, visibilidade, camadas, cor, opacidade e traçado; sinaliza âncoras indisponíveis e bloqueia deslocamentos futuros no replay. Escala própria, amostragem visual de velas e texto de tabela abreviado; não substitui validação do renderizador principal. Validação local pendente.
