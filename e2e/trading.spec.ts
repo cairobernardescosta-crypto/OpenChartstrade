@@ -11,7 +11,7 @@ async function readyOnEur(page: Page, hl: Harness): Promise<void> {
   await waitForTerminal(page);
   await selectSymbol(page, "xyz:EUR");
   await connectAndSetup(page, hl);
-  await expect(page.getByRole("button", { name: /^(Buy|Sell)\\b/ }).filter({ visible: true }).last()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^(Buy|Sell)\b/ }).filter({ visible: true }).last()).toBeVisible();
 }
 
 function expectBuilderOnEveryOrder(hl: Harness): void {
@@ -109,7 +109,7 @@ test.describe("trading a HIP-3 Forex market (xyz:EUR)", () => {
     await readyOnEur(page, hl);
     await setSize(page, "5"); // 5 EUR = $5.75 < $10
     await expect(page.getByTestId("size-help")).toContainText(/minimum/i);
-    await expect(page.getByRole("button", { name: /^Buy\\b/ }).filter({ visible: true }).last()).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^Buy\b/ }).filter({ visible: true }).last()).toBeDisabled();
     expect(hl.fake.orderActions()).toHaveLength(0);
   });
 });
