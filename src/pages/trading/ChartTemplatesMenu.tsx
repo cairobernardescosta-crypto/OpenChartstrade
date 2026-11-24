@@ -89,15 +89,13 @@ function useTemplateAutosave(
   const timerRef = useRef<number | null>(null);
   // Serialise so the effect only fires on real changes, not object identity.
   const serialized = JSON.stringify(content);
-  const skipFirstRef = useRef(true);
+  const previousRef = useRef<{name:string;serialized:string}|null>(null);
 
   useEffect(() => {
     if (!enabled || !activeName) return;
-    if (skipFirstRef.current) {
-      // Don't save the snapshot we just loaded.
-      skipFirstRef.current = false;
-      return;
-    }
+    const previous=previousRef.current;
+    previousRef.current={name:activeName,serialized};
+    if(!previous||previous.name!==activeName||previous.serialized===serialized)return;
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => {
       saveFn({ name: activeName, content: JSON.parse(serialized) as ChartTemplateContent });
@@ -107,10 +105,7 @@ function useTemplateAutosave(
     };
   }, [enabled, activeName, serialized, saveFn]);
 
-  // Re-arm the "skip first" guard whenever the active template changes.
-  useEffect(() => {
-    skipFirstRef.current = true;
-  }, [activeName]);
+
 }
 
 function MenuRow({

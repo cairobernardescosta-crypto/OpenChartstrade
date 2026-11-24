@@ -55,7 +55,8 @@ export function useIndicators(
   const overrides = useOverrides(scope);
   const colors = isDark ? CHART_COLORS.dark : CHART_COLORS.light;
   const [history,setHistory]=useState<{key:string;rows:Record<number,CandleData[]>}>({key:"",rows:{}});
-  const periods=[...new Set(library.filter(x=>activeIndicators.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.historySource==="independent"&&historyPlan(x.aggregation)).map(x=>x.aggregation))].sort((a,b)=>a-b).slice(0,6);
+  const allowedCustom=activeIndicators.filter(x=>x.startsWith("custom:")).slice(0,admin.maxActive);
+  const periods=[...new Set(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind!=="graphics"&&x.kind!=="session-candle"&&x.historySource==="independent"&&historyPlan(x.aggregation)).map(x=>x.aggregation))].sort((a,b)=>a-b).slice(0,6);
   const periodKey=periods.join(",");
   const lastTime=chartData[chartData.length-1]?.time;
   const replayCutoff=isReplaying&&typeof lastTime==="number"?lastTime:0;
@@ -111,13 +112,13 @@ export function useIndicators(
           const started=performance.now();
           try {
           const external=entry.historySource==="independent"&&entry.aggregation!==0;
-          const bounded=external?(history.key===historyKey?history.rows[entry.aggregation]??[]:[]):aggregation.get(entry.aggregation);
+          const bounded=external?(history.key===historyKey?history.rows[entry.aggregation]??[]:[]).slice(-admin.maxBars):aggregation.get(entry.aggregation);
           const result=cache.calculate(entry,bounded);
-          const data=external?alignHistoryPoints(result.points,indCandles):result.points;
+          const data=external?alignHistoryPoints(result.points,indCandles):entry.aggregation!==0?alignHistoryPoints(result.points.map(p=>({...p,time:p.time+sourceSeconds})),indCandles):result.points;
           if(performance.now()-started>100)throw new Error("Indicator execution budget exceeded");
           const key=type+":"+entry.plot;
           const scaleId=entry.scale==="independent"?"indicator-"+entry.id:"right";
-          if(!external&&result.cached&&!settingsChanged&&indicatorSeriesRef.current.has(key)){used.add(key);guard.success(type);continue;}
+          if(!external&&entry.aggregation===0&&result.cached&&!settingsChanged&&indicatorSeriesRef.current.has(key)){used.add(key);guard.success(type);continue;}
           const points=data.map(p=>({time:p.time as Time,value:p.value}));
           if(entry.plot==="histogram")histogram(key,{color:entry.color,priceScaleId:scaleId}).setData(points);
           else if(entry.plot==="area"){
@@ -294,7 +295,7 @@ export function useIndicators(
     return()=>{source.unsubscribeDataChanged(schedule);volume?.unsubscribeDataChanged(schedule);if(timer!==undefined)clearTimeout(timer);};
     // chartRef/candleSeriesRef are stable refs; colors derived from isDark dep.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIndicators, chartData, isDark, library, volumeData, overrides, admin, sourceSeconds, chartEpoch, liveVolumeRef, scope, isReplaying, history, historyKey]);
+  }, [activeIndicators, chartData, isDark, library, volumeData, overrides, admin, sourceSeconds, chartEpoch, liveVolumeRef, scope, isReplaying, history, historyKey, symbol]);
 
   useEffect(()=>{const chart=chartRef.current;const seriesMap=indicatorSeriesRef.current;const cache=cacheRef.current;const guard=guardRef.current;const signatures=signaturesRef.current;return()=>{if(chart)for(const series of seriesMap.values()){try{chart.removeSeries(series);}catch{/* disposed */}}seriesMap.clear();cache.clear();guard.reset();signatures.clear();};},[chartEpoch,chartRef]);
 
@@ -302,9 +303,9 @@ export function useIndicators(
     const series = candleSeriesRef.current;
     if (!series) return;
     const allowed=activeIndicators.filter(x=>x.startsWith("custom:")).slice(0,admin.maxActive);
-    const primitives = library.filter(x => allowed.includes(`custom:${x.id}`)).flatMap(x => {const entry=resolveIndicator(x,overrides);if(!entry.visible)return [];const items:import("lightweight-charts").ISeriesPrimitive<Time>[]=[];if(entry.kind==="session-candle")items.push(new SessionCandlePrimitive(entry,sourceSeconds,admin.maxBars,isReplaying?chartData:undefined));if(entry.graphics.length)items.push(new GraphicPrimitive(entry.graphics));return items;});
+    const primitives = library.filter(x => allowed.includes(`custom:${x.id}`)).flatMap(x => {const entry=resolveIndicator(x,overrides);if(!entry.visible)return [];const items:import("lightweight-charts").ISeriesPrimitive<Time>[]=[];if(entry.kind==="session-candle")items.push(new SessionCandlePrimitive(entry,sourceSeconds,admin.maxBars,isReplaying?chartData:undefined));if(entry.graphics.length)items.push(new GraphicPrimitive(entry.graphics,isReplaying?chartData:undefined));return items;});
     const attached:typeof primitives=[];
     for (const primitive of primitives) {try{series.attachPrimitive(primitive);attached.push(primitive);}catch(e){console.warn("Indicator attachment failed",e);}}
     return () => { for (const primitive of attached) { try { series.detachPrimitive(primitive); } catch { /* disposed chart */ } } };
-  }, [activeIndicators, library, overrides, admin, chartData.length === 0, sourceSeconds, chartEpoch, isReplaying, isReplaying?chartData:undefined]);
+  }, [activeIndicators, library, overrides, admin, sourceSeconds, chartEpoch, isReplaying, chartData]);
 }

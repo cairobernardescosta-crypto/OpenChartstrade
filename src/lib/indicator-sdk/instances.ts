@@ -18,7 +18,7 @@ export function clearOverrides(id:string){commit({primary:state.primary.filter(x
 export function resolveIndicator(entry:ImportedIndicator,overrides:readonly ImportedIndicator[]){return overrides.find(x=>x.id===entry.id&&x.version===entry.version)??entry;}
 
 export function exportOverrides(){return JSON.stringify(state);}
-export function restoreOverrides(source:string){if(source.length>2_000_000)throw new Error("Overrides backup too large");commit(validateOverrides(JSON.parse(source)));}
+export function restoreOverrides(source:string){if(source.length>16_000_000)throw new Error("Overrides backup too large");commit(validateOverrides(JSON.parse(source)));}
 export function validateOverrides(raw:unknown):Overrides{if(!raw||typeof raw!=="object")throw new Error("Invalid overrides");const r=raw as Record<string,unknown>;const primary=indicatorSchema.array().max(100).parse(r.primary),secondary=indicatorSchema.array().max(100).parse(r.secondary);for(const rows of [primary,secondary])if(new Set(rows.map(x=>x.id)).size!==rows.length)throw new Error("Duplicate chart settings");return {primary,secondary};}
 const hydration=hydrateState(KEY,state,validateOverrides,raw=>{state=validateOverrides(raw);listeners.forEach(f=>f());},()=>revision===0);
 

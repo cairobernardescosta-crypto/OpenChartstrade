@@ -45,3 +45,6 @@ Optional independent history uses the existing read-only market API, explicit ex
 
 ## HTF session lifecycle
 Session range freezes through closing and disabled weekdays, resets at the next eligible opening, and rejects missing or misaligned source bars when resolution is provided. Full-session boundary lines are independent of intraday HTF segments. Projection is anchored to the last contributing bar and stays inside the session and viewport where space permits. A dashed edge marker indicates offscreen closing time, not its actual chart coordinate. Preview uses actual sample OHLC extrema and configured offset/period. Local visual verification remains pending.
+
+## Regression protection
+Chart-derived HTF values are aligned at confirmed source close, replay graphics use only the historical slice, independent histories honor administrative limits and active math indicator selection, and cache entries use source-aware keys and LRU refresh. Recovery rejects concurrent edits. Added regression coverage for rewind, close-time alignment and executable imports. Native trading and wallet modules untouched. Local checks pending.

@@ -4,14 +4,14 @@ import {PluginBase} from "../chart-plugins/plugin-base";
 import type {Graphic} from "./graphics";
 export class GraphicPrimitive extends PluginBase {
  private readonly views:ISeriesPrimitivePaneView[];
- constructor(private readonly graphics:readonly Graphic[]){super();this.views=(["bottom","normal","top"] as const).map(layer=>({zOrder:()=>layer,renderer:()=>({draw:(target:CanvasRenderingTarget2D)=>this.draw(target,layer)})}));}
+ constructor(private readonly graphics:readonly Graphic[],private readonly replayData?:readonly import("lightweight-charts").CandlestickData<import("lightweight-charts").Time>[]){super();this.views=(["bottom","normal","top"] as const).map(layer=>({zOrder:()=>layer,renderer:()=>({draw:(target:CanvasRenderingTarget2D)=>this.draw(target,layer)})}));}
  paneViews():readonly ISeriesPrimitivePaneView[]{return this.views;}
  protected override dataUpdated(){this.requestUpdate();}
  private draw(target:CanvasRenderingTarget2D,layer:Graphic["layer"]){
-   const scale=this.chart.timeScale(),data=this.series.data(),last=data[data.length-1];if(!last)return;
+   const scale=this.chart.timeScale(),data=this.replayData??this.series.data(),last=data[data.length-1];if(!last)return;
    const lastX=scale.timeToCoordinate(last.time);if(lastX===null)return;
    const latest=scale.coordinateToLogical(lastX);if(latest===null)return;
-   const x=(bars:number)=>scale.logicalToCoordinate((latest+bars) as Parameters<typeof scale.logicalToCoordinate>[0]);
+   const x=(bars:number)=>this.replayData&&bars>0?null:scale.logicalToCoordinate((latest+bars) as Parameters<typeof scale.logicalToCoordinate>[0]);
    const y=(price:number,bars:number,anchor:Graphic["anchor"])=>{if(anchor==="price")return this.series.priceToCoordinate(price);const bar=data[data.length-1+bars];if(!bar||!(anchor in bar))return null;const base=(bar as unknown as Record<string,unknown>)[anchor];return typeof base==="number"?this.series.priceToCoordinate(base+price):null;};
    const point=(p:{bars:number;price:number},anchor:Graphic["anchor"])=>{const a=x(p.bars),b=y(p.price,p.bars,anchor);return a===null||b===null?null:{x:a,y:b};};
    target.useMediaCoordinateSpace(({context:c,mediaSize:m})=>{

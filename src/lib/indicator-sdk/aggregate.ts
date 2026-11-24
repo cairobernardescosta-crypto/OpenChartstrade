@@ -5,6 +5,7 @@ export const aggregationMinutes=[0,15,30,60,120,240,360,720,1440,10080,43200] as
 export function aggregateCompleted(candles:readonly CandleData[],minutes:number,sourceSeconds:number,lastClosed=false):CandleData[]{
  if(minutes===0)return [...candles];
  if(minutes===43200)return aggregateMonths(candles,sourceSeconds,lastClosed);
+ if(!aggregationMinutes.some(x=>x===minutes))return [];
  const span=minutes*60;
  if(!Number.isInteger(sourceSeconds)||sourceSeconds<=0||span<sourceSeconds||span%sourceSeconds!==0)return [];
  const out:CandleData[]=[];let bucket:CandleData|undefined;let start=0;let count=0;let valid=false;let previous=0;

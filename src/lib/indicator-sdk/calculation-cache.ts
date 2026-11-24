@@ -10,10 +10,10 @@ export class CalculationCache{
  private entries=new Map<string,Entry>();
  constructor(private maxEntries=12,private maxPoints=100000){}
  calculate(config:ImportedIndicator,bars:CandleData[]):{points:IndicatorPoint[];cached:boolean;incremental:boolean}{
-  const signature=JSON.stringify([config.kind,config.period,config.expression,parameterValues(config),config.aggregation]);
+  const signature=JSON.stringify([config.kind,config.period,config.expression,parameterValues(config),config.aggregation,config.historySource]);
   const old=this.entries.get(config.id);
   const prefix=old?.signature===signature?sharedPrefix(old.input,bars):0;
-  if(old&&old.signature===signature&&prefix===old.input.length&&prefix===bars.length)return {points:old.output,cached:true,incremental:false};
+  if(old&&old.signature===signature&&prefix===old.input.length&&prefix===bars.length){this.entries.delete(config.id);this.entries.set(config.id,old);return {points:old.output,cached:true,incremental:false};}
   let output:IndicatorPoint[];let incremental=false;
   if(config.kind==="expression"){
    if(old&&prefix>0&&old.signature===signature){
