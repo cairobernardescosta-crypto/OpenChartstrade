@@ -1,8 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { MobileAccountBar, MobileTradingPanel } from "../components/MobileTradingPanel.tsx";
-import { NewsFeed as MarketNewsFeed } from "../components/TradingPowerFeatures.tsx";
-import { TradingViewTechnicalAnalysis } from "../components/TradingViewWidgets.tsx";
 import { type IndicatorType } from "../lib/indicators.ts";
 import { useCandles } from "../services/queries.ts";
 import { useHoverCollapse } from "../hooks/useHoverCollapse.ts";
@@ -16,11 +14,15 @@ import { ChartPanel } from "./trading/ChartPanel.tsx";
 import { ChartToolbar } from "./trading/ChartToolbar.tsx";
 import { REPLAY_ENABLED, type DrawingLine, type DrawingTool, type Timeframe } from "./trading/constants.ts";
 import { getPipDigits } from "./trading/utils.ts";
-import { DOMPanel } from "./trading/DOMPanel.tsx";
+
+ // Optional panels are split into separate chunks and fetched only when opened.
+const DOMPanel = lazy(() => import("./trading/DOMPanel.tsx").then((m) => ({ default: m.DOMPanel })));
+const WatchlistPanel = lazy(() => import("./trading/WatchlistPanel.tsx").then((m) => ({ default: m.WatchlistPanel })));
+const ReplayScrubber = lazy(() => import("./trading/ReplayScrubber.tsx").then((m) => ({ default: m.ReplayScrubber })));
+const MarketNewsFeed = lazy(() => import("../components/TradingPowerFeatures.tsx").then((m) => ({ default: m.NewsFeed })));
+const TradingViewTechnicalAnalysis = lazy(() => import("../components/TradingViewWidgets.tsx").then((m) => ({ default: m.TradingViewTechnicalAnalysis })));
 import { MarketClosedBanner } from "./trading/MarketClosedBanner.tsx";
 import { OrderPanel } from "./trading/OrderPanel.tsx";
-import { ReplayScrubber } from "./trading/ReplayScrubber.tsx";
-import { WatchlistPanel } from "./trading/WatchlistPanel.tsx";
 
 /**
  * The default terminal layout.
@@ -393,7 +395,9 @@ export function TradingPage() {
 
           {/* Replay timeline scrubber — disabled until the feature is QA'd */}
           {REPLAY_ENABLED && isReplaying && activeAccountId != null && (
-            <ReplayScrubber accountId={activeAccountId} />
+            <Suspense fallback={null}>
+              <ReplayScrubber accountId={activeAccountId} />
+            </Suspense>
           )}
 
           {/* Bottom panel: the resize grip remains visible while the content collapses. */}
@@ -522,9 +526,14 @@ export function TradingPage() {
                 onOrderSuccess={onOrderSuccess}
               />
             )}
-            {rightPanel === "dom" && <DOMPanel symbol={selectedSymbol} tick={tick} />}
+            {rightPanel === "dom" && (
+              <Suspense fallback={null}>
+                <DOMPanel symbol={selectedSymbol} tick={tick} />
+              </Suspense>
+            )}
             {rightPanel === "watchlist" && (
-              <WatchlistPanel
+              <Suspense fallback={null}>
+                <WatchlistPanel
                 symbols={symbols}
                 ticks={ticks}
                 selectedSymbol={selectedSymbol}
@@ -532,22 +541,27 @@ export function TradingPage() {
                 oneClick={oneClick}
                 accountId={activeAccountId}
                 isFeedConnected={isFeedConnected}
-              />
+                />
+              </Suspense>
             )}
             {rightPanel === "news" && (
               <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                <MarketNewsFeed symbol={selectedSymbol} />
+                <Suspense fallback={null}>
+                  <MarketNewsFeed symbol={selectedSymbol} />
+                </Suspense>
               </div>
             )}
             {rightPanel === "tv-analysis" && (
               <div className="flex-1 overflow-hidden">
-                <TradingViewTechnicalAnalysis
-                  symbol={selectedSymbol}
-                  theme={isDark ? "dark" : "light"}
-                  interval={timeframe}
-                  width="100%"
-                  height="100%"
-                />
+                <Suspense fallback={null}>
+                  <TradingViewTechnicalAnalysis
+                    symbol={selectedSymbol}
+                    theme={isDark ? "dark" : "light"}
+                    interval={timeframe}
+                    width="100%"
+                    height="100%"
+                  />
+                </Suspense>
               </div>
             )}
           </div>
