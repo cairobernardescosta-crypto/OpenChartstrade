@@ -19,3 +19,5 @@ export function resolveIndicator(entry:ImportedIndicator,overrides:readonly Impo
 export function exportOverrides(){return JSON.stringify(state);}
 export function restoreOverrides(source:string){if(source.length>2_000_000)throw new Error("Overrides backup too large");const raw=JSON.parse(source);commit({primary:indicatorSchema.array().max(100).parse(raw.primary),secondary:indicatorSchema.array().max(100).parse(raw.secondary)});}
 if(state.primary.length||state.secondary.length)mirrorState(KEY,state);
+
+export function replaceChartOverrides(scope:ChartScope,values:unknown){const rows=indicatorSchema.array().max(100).parse(values);if(new Set(rows.map(x=>x.id)).size!==rows.length)throw new Error("Duplicate chart settings");commit({...state,[scope]:rows});}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import {useIndicatorDiagnostics,resetDiagnostics} from "../../../lib/indicator-sdk/diagnostics";
 import {IndicatorPreview} from "./IndicatorPreview";
 import {useIndicatorAdmin,saveIndicatorAdmin} from "../../../lib/indicator-sdk/admin";
 import {persistenceError} from "../../../lib/indicator-sdk/database";
@@ -10,6 +11,8 @@ import { useIndicatorLibrary, installIndicator, updateIndicator, removeIndicator
 export function IndicatorLibraryMenu({active,toggle,scope="primary"}:{active: IndicatorType[];toggle:(type:IndicatorType)=>void;scope?:ChartScope}) {
   const library=useIndicatorLibrary();
   const admin=useIndicatorAdmin();
+  const diagnostics=useIndicatorDiagnostics();
+  const [viewSource,setViewSource]=useState<string|null>(null);
   const [showAdmin,setShowAdmin]=useState(false);
   const [overrideText,setOverrideText]=useState("");
   const overrides=useOverrides(scope);
@@ -33,7 +36,7 @@ export function IndicatorLibraryMenu({active,toggle,scope="primary"}:{active: In
     <div className="flex gap-2 text-xs"><button onClick={()=>setFavorites(v=>!v)} aria-pressed={favorites}>★ Favorites</button><button onClick={()=>{setBackupText(exportLibrary());setOverrideText(exportOverrides());setBackup(v=>!v);}}>Backup</button></div>
     {backup && <div className="space-y-1"><textarea aria-label="Library backup" className="w-full h-24 bg-background border border-border text-xs" value={backupText} onChange={e=>setBackupText(e.target.value)}/><button onClick={()=>attempt(()=>{if(window.confirm("Replace indicator library?"))restoreLibrary(backupText);})}>Restore library</button></div>}
     <button className="text-xs" onClick={()=>setShowAdmin(v=>!v)}>Administration</button>
-    {showAdmin&&<div className="space-y-2 border border-border rounded p-2 text-xs"><label className="block">Maximum imported indicators <input type="number" min={1} max={30} value={admin.maxActive} onChange={e=>attempt(()=>saveIndicatorAdmin({...admin,maxActive:Number(e.target.value)}))}/></label><label className="block">Maximum historical bars <input type="number" min={100} max={20000} step={100} value={admin.maxBars} onChange={e=>attempt(()=>saveIndicatorAdmin({...admin,maxBars:Number(e.target.value)}))}/></label><p>SDK 1 · {library.length} definitions · {active.filter(x=>x.startsWith("custom:")).length} active</p><p>Executable code, wallet and network access: blocked</p><p>{persistenceError()||"IndexedDB mirror: no recorded write error"}</p><button onClick={()=>{if(window.confirm("Recover library from IndexedDB mirror?"))void recoverLibraryMirror().catch(e=>setError(String(e)));}}>Recover mirror</button></div>}
+    {showAdmin&&<div className="space-y-2 border border-border rounded p-2 text-xs"><label className="block">Maximum imported indicators <input type="number" min={1} max={30} value={admin.maxActive} onChange={e=>attempt(()=>saveIndicatorAdmin({...admin,maxActive:Number(e.target.value)}))}/></label><label className="block">Maximum historical bars <input type="number" min={100} max={20000} step={100} value={admin.maxBars} onChange={e=>attempt(()=>saveIndicatorAdmin({...admin,maxBars:Number(e.target.value)}))}/></label><p>SDK 1 · {library.length} definitions · {active.filter(x=>x.startsWith("custom:")).length} active</p><p>Executable code, wallet and network access: blocked</p><label className="block"><input type="checkbox" checked={admin.diagnostics} onChange={e=>attempt(()=>saveIndicatorAdmin({...admin,diagnostics:e.target.checked}))}/> Performance diagnostics</label>{admin.diagnostics&&<div className="max-h-32 overflow-y-auto">{diagnostics.filter(x=>x.scope===scope).map(x=><div key={x.id} className="border-t border-border py-1">{x.id}: {x.ms.toFixed(2)} ms · {x.bars} bars {x.error&&<span className="text-red-400">{x.error} ({x.failures})</span>}</div>)}<button onClick={resetDiagnostics}>Clear diagnostics</button></div>}<p>{persistenceError()||"IndexedDB mirror: no recorded write error"}</p><button onClick={()=>{if(window.confirm("Recover library from IndexedDB mirror?"))void recoverLibraryMirror().catch(e=>setError(String(e)));}}>Recover mirror</button></div>}
     {backup&&<div className="space-y-1"><textarea aria-label="Chart settings backup" className="w-full h-20 bg-background border border-border text-xs" value={overrideText} onChange={e=>setOverrideText(e.target.value)}/><button onClick={()=>attempt(()=>{if(window.confirm("Replace chart indicator settings?"))restoreOverrides(overrideText);})}>Restore chart settings</button></div>}
     {getLibraryError() && <p role="alert" className="text-xs">Stored library could not be loaded.</p>}
     {draft && <div className="border border-border rounded p-2 text-xs space-y-2">
@@ -47,6 +50,7 @@ export function IndicatorLibraryMenu({active,toggle,scope="primary"}:{active: In
       <label>Color <input type="color" value={draft.color} onChange={e=>setDraft({...draft,color:e.target.value})}/></label>
       <div className="flex gap-2"><button onClick={()=>attempt(()=>{const value=indicatorSchema.parse(draft); if(localEdit)saveOverride(scope,value);else if(library.some(x=>x.id===value.id)){if(!window.confirm("Replace installed indicator definition?"))return;updateIndicator(value);}else installIndicator(value);setDraft(null);})}>Save</button><button onClick={()=>setDraft(null)}>Cancel</button></div>
     </div>}
+    {viewSource!==null&&<div className="space-y-1"><textarea readOnly aria-label="Indicator definition source" className="w-full h-32 bg-background border border-border font-mono text-xs" value={viewSource}/><button onClick={()=>setViewSource(null)}>Close source</button></div>}
     {error && <p role="alert" className="text-xs text-red-400 break-words">{error}</p>}
     {library.length>0 && <input aria-label="Search imported indicators" className="w-full bg-background border border-border rounded px-1 text-xs" placeholder="Search imported" value={query} onChange={e=>setQuery(e.target.value)}/>}
     {library.filter(x=>(!favorites||x.favorite)&&x.name.toLowerCase().includes(query.toLowerCase())).map(x=>{
@@ -56,6 +60,7 @@ export function IndicatorLibraryMenu({active,toggle,scope="primary"}:{active: In
         <button aria-label={"Favorite "+x.name} onClick={()=>attempt(()=>updateIndicator({...x,favorite:!x.favorite}))}>{x.favorite?"★":"☆"}</button>
         <button aria-label={"Duplicate "+x.name} onClick={()=>attempt(()=>duplicateIndicator(x.id))}>Copy</button>
         {versions(x.id).length>0 && <button aria-label={"Restore previous version of "+x.name} onClick={()=>attempt(()=>{if(window.confirm("Restore previous settings?"))updateIndicator(versions(x.id)[0]!);})}>↶</button>}
+        <button aria-label={"View source "+x.name} onClick={()=>setViewSource("export default "+JSON.stringify(x,null,2)+";")}>Code</button>
         <button aria-label={"Configure "+x.name} onClick={()=>{setLocalEdit(true);setDraft(resolveIndicator(x,overrides));}}>Edit</button>
         <button aria-label={"Reset chart settings for "+x.name} onClick={()=>attempt(()=>resetOverride(scope,x.id))}>Reset</button>
         <button aria-label={"Export "+x.name} onClick={()=>{const url=URL.createObjectURL(new Blob(["export default "+JSON.stringify(x,null,2)+";"],{type:"text/plain"}));const a=document.createElement("a");a.href=url;a.download=x.id+".ts";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}}>↓</button>

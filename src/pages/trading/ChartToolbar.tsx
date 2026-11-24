@@ -378,6 +378,8 @@ export function ChartToolbar({
       {/* Chart layout templates (save/load/autosave) */}
       {onSetIndicators && onSetPlugins && (
         <ChartTemplatesMenu
+          key={indicatorScope}
+          indicatorScope={indicatorScope}
           activeIndicators={activeIndicators}
           onSetIndicators={onSetIndicators}
           activePlugins={activePlugins}

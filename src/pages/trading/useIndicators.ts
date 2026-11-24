@@ -16,6 +16,7 @@ import {
 import { toIndicatorCandles } from "./utils.ts";
 import { useOverrides, resolveIndicator, type ChartScope } from "../../lib/indicator-sdk/instances";
 import {useIndicatorAdmin} from "../../lib/indicator-sdk/admin";
+import {reportIndicator} from "../../lib/indicator-sdk/diagnostics";
 import {aggregateCompleted} from "../../lib/indicator-sdk/aggregate";
 import { expressionPoints } from "../../lib/indicator-sdk/expression";
 import { useIndicatorLibrary } from "../../lib/indicator-sdk/storage";
@@ -75,11 +76,15 @@ export function useIndicators(
         const definition = library.find(x => `custom:${x.id}` === type);
         const entry = definition && resolveIndicator(definition,overrides);
         if (entry && entry.kind !== "session-candle" && entry.kind !== "graphics") {
+          const started=performance.now();
+          try {
           const bounded=aggregateCompleted(indCandles.slice(-admin.maxBars),entry.aggregation,sourceSeconds);
           const data = entry.kind === "expression" ? expressionPoints(bounded,entry.expression) : (entry.kind === "sma" ? sma : ema)(bounded, entry.period);
           const s = line(type,{ color: entry.color, lineWidth: entry.lineWidth as 1|2|3|4|5, priceScaleId: "right" });
           s.setData(data.map(p => ({ time: p.time as Time, value: p.value })));
           indicatorSeriesRef.current.set(type, s);
+          if(admin.diagnostics)reportIndicator(scope,entry.id,performance.now()-started,bounded.length);
+          }catch(e){used.delete(type);if(admin.diagnostics)reportIndicator(scope,entry.id,performance.now()-started,0,e instanceof Error?e.message:String(e));}
         }
         continue;
       }
@@ -245,7 +250,7 @@ export function useIndicators(
     return()=>{source.unsubscribeDataChanged(schedule);volume?.unsubscribeDataChanged(schedule);if(timer!==undefined)clearTimeout(timer);};
     // chartRef/candleSeriesRef are stable refs; colors derived from isDark dep.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIndicators, chartData, isDark, library, volumeData, overrides, admin, sourceSeconds, chartEpoch, liveVolumeRef]);
+  }, [activeIndicators, chartData, isDark, library, volumeData, overrides, admin, sourceSeconds, chartEpoch, liveVolumeRef, scope]);
 
   useEffect(()=>{const chart=chartRef.current;const seriesMap=indicatorSeriesRef.current;return()=>{if(chart)for(const series of seriesMap.values()){try{chart.removeSeries(series);}catch{/* disposed */}}seriesMap.clear();};},[chartEpoch,chartRef]);
 

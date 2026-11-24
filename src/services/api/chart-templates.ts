@@ -7,6 +7,8 @@ export interface ChartTemplateContent {
   prefs: Record<string, string | boolean>;
   indicators: string[];
   plugins: string[];
+  importedDefinitions?: import('../../lib/indicator-sdk/schema').ImportedIndicator[];
+  importedOverrides?: import('../../lib/indicator-sdk/schema').ImportedIndicator[];
 }
 
 export interface ChartTemplate {
