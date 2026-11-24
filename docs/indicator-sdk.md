@@ -6,3 +6,6 @@ Not complete: IndexedDB, arbitrary TS sandbox, full drawing API, true lower pane
 
 ## Increment: storage and management
 IndexedDB mirrors library, revision history and per-chart overrides asynchronously; localStorage remains the authoritative compatibility cache. Manual mirror recovery restores library definitions. Library export includes revision history; chart settings are exported/restored separately. Preview uses synthetic data, not the live chart. Administrative limits restrict imported active instances and mathematical history size. The session primitive is still not bounded by the mathematical history limit. Diagnostics show persistence errors and counts, not measured memory/CPU. Arbitrary TS execution, full graphical DSL, real multi-timeframe aggregation and live integration validation remain outstanding.
+
+## Declarative graphics
+The graphics kind accepts up to 100 validated drawing commands: line, horizontal, vertical, box, text, arrow and table. Coordinates use price and logical bar offsets from the latest bar. These are static declarative graphics, not a general programmable drawing runtime. Graphics preview reports validated command count; actual chart rendering requires local validation.

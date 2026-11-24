@@ -18,6 +18,7 @@ import { useOverrides, resolveIndicator, type ChartScope } from "../../lib/indic
 import {useIndicatorAdmin} from "../../lib/indicator-sdk/admin";
 import { expressionPoints } from "../../lib/indicator-sdk/expression";
 import { useIndicatorLibrary } from "../../lib/indicator-sdk/storage";
+import {GraphicPrimitive} from "../../lib/indicator-sdk/graphic-renderer";
 import { SessionCandlePrimitive } from "../../lib/indicator-sdk/renderer";
 import { CHART_COLORS } from "./constants.ts";
 
@@ -60,7 +61,7 @@ export function useIndicators(
         if(++importedCount>admin.maxActive)continue;
         const definition = library.find(x => `custom:${x.id}` === type);
         const entry = definition && resolveIndicator(definition,overrides);
-        if (entry && entry.kind !== "session-candle") {
+        if (entry && entry.kind !== "session-candle" && entry.kind !== "graphics") {
           const bounded=indCandles.slice(-admin.maxBars);
           const data = entry.kind === "expression" ? expressionPoints(bounded,entry.expression) : (entry.kind === "sma" ? sma : ema)(bounded, entry.period);
           const s = chart.addLineSeries({ color: entry.color, lineWidth: 1, priceScaleId: "right" });
@@ -230,8 +231,9 @@ export function useIndicators(
     const series = candleSeriesRef.current;
     if (!series) return;
     const allowed=activeIndicators.filter(x=>x.startsWith("custom:")).slice(0,admin.maxActive);
-    const primitives = library.filter(x => x.kind === "session-candle" && allowed.includes(`custom:${x.id}`)).map(x => new SessionCandlePrimitive(resolveIndicator(x,overrides)));
-    for (const primitive of primitives) series.attachPrimitive(primitive);
-    return () => { for (const primitive of primitives) { try { series.detachPrimitive(primitive); } catch { /* disposed chart */ } } };
+    const primitives = library.filter(x => allowed.includes(`custom:${x.id}`)).flatMap(x => {const entry=resolveIndicator(x,overrides);return entry.kind==="session-candle"?[new SessionCandlePrimitive(entry) as import("lightweight-charts").ISeriesPrimitive<Time>]:entry.kind==="graphics"?[new GraphicPrimitive(entry.graphics) as import("lightweight-charts").ISeriesPrimitive<Time>]:[];});
+    const attached:typeof primitives=[];
+    for (const primitive of primitives) {try{series.attachPrimitive(primitive);attached.push(primitive);}catch(e){console.warn("Indicator attachment failed",e);}}
+    return () => { for (const primitive of attached) { try { series.detachPrimitive(primitive); } catch { /* disposed chart */ } } };
   }, [activeIndicators, library, overrides, admin, chartData.length === 0]);
 }

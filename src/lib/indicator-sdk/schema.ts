@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { compileExpression } from "./expression";
+import {graphicSchema} from "./graphics";
 
 const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 const id = z.string().regex(/^[a-z][a-z0-9-]{0,63}$/);
@@ -9,7 +10,8 @@ export const indicatorSchema = z.object({
   name: z.string().trim().min(1).max(80),
   version: z.string().regex(/^\d+\.\d+\.\d+$/),
   description: z.string().max(500).default(""),
-  kind: z.enum(["sma", "ema", "session-candle", "expression"]),
+  kind: z.enum(["sma", "ema", "session-candle", "expression", "graphics"]),
+  graphics:z.array(graphicSchema).max(100).default([]),
   expression: z.string().max(512).default("close"),
   favorite: z.boolean().default(false),
   author: z.string().max(80).default(""),
