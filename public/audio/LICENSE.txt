@@ -1,0 +1,20 @@
+Kenney UI Audio
+Author: Kenney (Kenney Vleugels), https://kenney.nl
+Original source: https://kenney.nl/assets/ui-audio
+Pack mirror used for the selected WAV files: https://github.com/Calinou/kenney-ui-audio
+
+License: Creative Commons Zero v1.0 Universal (CC0-1.0)
+https://creativecommons.org/publicdomain/zero/1.0/
+
+The original license permits personal and commercial use. Attribution is not
+required; credit to Kenney is included here as a courtesy.
+
+Selected and renamed files:
+- click3.wav -> ui.wav
+- click4.wav -> toggle.wav
+- switch14.wav -> success.wav
+- switch12.wav -> warning.wav
+- switch13.wav -> error.wav
+- switch26.wav -> alert.wav
+- switch28.wav -> connection.wav
+- switch7.wav -> financial.wav

@@ -5,6 +5,7 @@ import {
   Newspaper,
   Palette,
   RotateCcw,
+  Volume2,
   Target,
   X,
 } from "lucide-react";
@@ -14,6 +15,8 @@ import { type ChartPreferences, type VisualChartScope, updateChartPreferences } 
 import { useDragOffset } from "../../hooks/useDragOffset.ts";
 import { cn } from "../../lib/utils.ts";
 import { CHART_COLORS, type ChartColors } from "./constants.ts";
+import { playSound } from "../../services/audio.ts";
+import { SoundSettingsTab } from "./SoundSettingsTab.tsx";
 
 // ── Chart Settings dialog ─────────────────────────────────────────────────────
 // Opened from the chart context menu. Every control writes straight through
@@ -36,13 +39,14 @@ export interface ChartSettingsDialogProps {
   hasAccount: boolean;
 }
 
-type TabId = "appearance" | "colors" | "trading" | "events" | "challenge";
+type TabId = "appearance" | "colors" | "trading" | "events" | "sounds" | "challenge";
 
 const TABS: Array<{ id: TabId; label: string; icon: ReactNode }> = [
   { id: "appearance", label: "Appearance", icon: <CandlestickChart className="h-3.5 w-3.5" /> },
   { id: "colors", label: "Colors", icon: <Palette className="h-3.5 w-3.5" /> },
   { id: "trading", label: "Trading", icon: <Crosshair className="h-3.5 w-3.5" /> },
   { id: "events", label: "Events", icon: <Newspaper className="h-3.5 w-3.5" /> },
+  { id: "sounds", label: "Efeitos sonoros", icon: <Volume2 className="h-3.5 w-3.5" /> },
   { id: "challenge", label: "Challenge", icon: <Target className="h-3.5 w-3.5" /> },
 ];
 
@@ -495,6 +499,7 @@ function TabBody({
       />
     );
   }
+  if (tab === "sounds") return <SoundSettingsTab />;
   return <ChallengeTab prefs={props.prefs} hasAccount={props.hasAccount} />;
 }
 
@@ -506,6 +511,7 @@ export function ChartSettingsDialog(props: ChartSettingsDialogProps) {
 
   const close = () => {
     drag.reset();
+    void playSound("ui", "interface");
     onClose();
   };
   const resetPayload = RESET_BY_TAB[tab];
@@ -540,7 +546,7 @@ export function ChartSettingsDialog(props: ChartSettingsDialogProps) {
             {tabs.map((t) => (
               <button
                 key={t.id}
-                onClick={() => setTab(t.id)}
+                onClick={() => { setTab(t.id); void playSound("ui", "interface"); }}
                 className={cn(
                   "flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-xs transition-colors",
                   tab === t.id

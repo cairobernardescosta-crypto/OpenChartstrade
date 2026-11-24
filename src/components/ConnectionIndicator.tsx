@@ -1,9 +1,10 @@
 /* eslint-disable react-refresh/only-export-components */
-import { useState, useEffect, useSyncExternalStore } from "react";
+import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import { wsClient, type ConnectionState } from "@/services/ws";
 import { useMarketDataHealth } from "@/services/queries";
 import { cn } from "@/lib/utils";
 import { Wifi, WifiOff, Loader2 } from "lucide-react";
+import { playSound } from "@/services/audio";
 
 interface MarketDataHealthSnapshot {
   adapter?: {
@@ -115,6 +116,14 @@ const stateConfig = {
 
 export function ConnectionIndicator({ className }: { className?: string }) {
   const state = useConnectionState();
+  const previousState = useRef<ConnectionState | null>(null);
+  useEffect(() => {
+    const previous = previousState.current;
+    previousState.current = state;
+    if (previous === null || previous === state) return;
+    if (state === "connected") void playSound("connection", "connection");
+    else if (previous === "connected" && state === "disconnected") void playSound("warning", "connection");
+  }, [state]);
   const { label, icon: Icon, color, dot } = stateConfig[state];
   const isSpinning = state === "connecting" || state === "reconnecting";
 

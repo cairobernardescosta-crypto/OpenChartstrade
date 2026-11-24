@@ -41,6 +41,7 @@ import { useEffect, useRef, useState } from "react";
 import { IndicatorLibraryMenu } from "./indicators/IndicatorLibraryMenu";
 import { INDICATOR_REGISTRY, type IndicatorType } from "../../lib/indicators.ts";
 import { cn, formatNumber } from "../../lib/utils.ts";
+import { playSound, preloadSounds } from "../../services/audio.ts";
 import {
   type DrawingLine,
   type DrawingTool,
@@ -148,6 +149,7 @@ export function ChartToolbar({
   stayInDrawingMode = false,
   onToggleStayInDrawingMode,
 }: ChartToolbarProps) {
+  useEffect(() => { preloadSounds(); }, []);
   const [showSymbolSearch, setShowSymbolSearch] = useState(false);
   const [symbolFilter, setSymbolFilter] = useState("");
   const network = useHlSession((s) => s.network);
@@ -231,6 +233,7 @@ export function ChartToolbar({
                         key={s.id || s.name}
                         onClick={() => {
                           onSymbolChange(s.name);
+                          void playSound("ui", "interface");
                           setShowSymbolSearch(false);
                           setSymbolFilter("");
                         }}
@@ -273,6 +276,7 @@ export function ChartToolbar({
                     key={s.id || s.name}
                     onClick={() => {
                       onSymbolChange(s.name);
+                      void playSound("ui", "interface");
                       setShowSymbolSearch(false);
                       setSymbolFilter("");
                     }}
@@ -324,7 +328,7 @@ export function ChartToolbar({
         {TIMEFRAMES.map((tf) => (
           <button
             key={tf}
-            onClick={() => onTimeframeChange(tf)}
+            onClick={() => { onTimeframeChange(tf); void playSound("ui", "interface"); }}
             disabled={isReplaying}
             title={isReplaying ? "Timeframe is fixed to 1m during replay" : undefined}
             className={cn(
@@ -414,11 +418,11 @@ export function ChartToolbar({
 
           {showIndicatorMenu && (
             <div className="absolute top-full left-0 z-50 mt-1 w-80 max-h-[75vh] overflow-y-auto bg-card border border-border rounded-lg shadow-xl p-2 space-y-0.5">
-              <IndicatorLibraryMenu key={indicatorScope} scope={indicatorScope} active={activeIndicators} toggle={onToggleIndicator} symbol={selectedSymbol} timeframe={timeframe} replay={isReplaying} previewCandles={previewCandles} />
+              <IndicatorLibraryMenu key={indicatorScope} scope={indicatorScope} active={activeIndicators} toggle={(id)=>{onToggleIndicator(id);void playSound("toggle","indicators");}} symbol={selectedSymbol} timeframe={timeframe} replay={isReplaying} previewCandles={previewCandles} />
               {INDICATOR_REGISTRY.map((ind) => (
                 <button
                   key={ind.type}
-                  onClick={() => onToggleIndicator(ind.type)}
+                  onClick={() => { onToggleIndicator(ind.type); void playSound("toggle", "indicators"); }}
                   className={cn(
                     "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-secondary text-left",
                     activeIndicators.includes(ind.type) && "bg-secondary",
@@ -691,11 +695,13 @@ function DrawingToolsDropdown({
 
   const handleSelect = (t: DrawingTool) => {
     onDrawingTool(drawingTool === t ? "none" : t);
+    void playSound("toggle", "drawings");
     setOpen(false);
   };
 
   const handleClear = () => {
     onClearDrawings();
+    void playSound("warning", "drawings");
     setOpen(false);
   };
 

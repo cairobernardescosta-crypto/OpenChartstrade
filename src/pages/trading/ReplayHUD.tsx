@@ -4,6 +4,7 @@ import { cn, toLocalDateString } from "../../lib/utils.ts";
 import { useTradingStore } from "../../services/store.tsx";
 import { api } from "../../services/api.ts";
 import { safeSession } from "../../lib/safe-storage.ts";
+import { playSound } from "../../services/audio.ts";
 
 const SPEED_OPTIONS = [0.5, 1, 2, 5, 10] as const;
 type Speed = (typeof SPEED_OPTIONS)[number];
@@ -33,19 +34,19 @@ export function ReplayHUD({ accountId }: { accountId: string }) {
 
   const handleStart = () => {
     setReplaySessionDate(sessionDate);
-    api.replayStart(accountId, sessionDate, replaySpeed).catch(() => null);
+    api.replayStart(accountId, sessionDate, replaySpeed).then(()=>playSound("ui","replay")).catch(() => null);
   };
 
   const handlePause = () => {
-    api.replayPause(accountId, sessionDate).catch(() => null);
+    api.replayPause(accountId, sessionDate).then(()=>playSound("toggle","replay")).catch(() => null);
   };
 
   const handleResume = () => {
-    api.replayResume(accountId, sessionDate).catch(() => null);
+    api.replayResume(accountId, sessionDate).then(()=>playSound("ui","replay")).catch(() => null);
   };
 
   const handleStop = () => {
-    api.replayStop(accountId, sessionDate).catch(() => null);
+    api.replayStop(accountId, sessionDate).then(()=>playSound("toggle","replay")).catch(() => null);
   };
 
   const handleSpeed = (speed: Speed) => {

@@ -1,6 +1,8 @@
 // ── Global toast store ──────────────────────────────────────
 // Lightweight pub-sub so any module can fire toasts without React context.
 
+import { playSound, type SoundCategory, type SoundEffect } from "./audio.ts";
+
 export interface ToastPayload {
   type: "info" | "success" | "warning" | "error";
   title: string;
@@ -23,6 +25,13 @@ export const toast = {
         console.error("[toast] listener threw", err);
       }
     }
+    const text = `${title} ${message}`;
+    const financial = /order|position|trade|take profit|stop loss|leverage|close(d| failed)?/i.test(text);
+    const connection = /connect|data feed|network|offline|online/i.test(text);
+    const alert = /alert|price|cross/i.test(text);
+    const category: SoundCategory = financial ? "financial" : connection ? "connection" : "notifications";
+    const effect: SoundEffect = financial ? "financial" : connection ? "connection" : alert ? "alert" : type === "error" ? "error" : type === "warning" ? "warning" : type === "success" ? "success" : "ui";
+    if (type !== "info" || financial || connection || alert) void playSound(effect, category);
   },
 
   success(title: string, message: string) {
