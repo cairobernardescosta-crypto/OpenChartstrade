@@ -41,6 +41,7 @@ import { useEffect, useRef, useState } from "react";
 import { IndicatorLibraryMenu } from "./indicators/IndicatorLibraryMenu";
 import { INDICATOR_REGISTRY, type IndicatorType } from "../../lib/indicators.ts";
 import { cn, formatNumber } from "../../lib/utils.ts";
+import { safeStorage } from "../../lib/safe-storage.ts";
 import { playSound, preloadSounds } from "../../services/audio.ts";
 import {
   type DrawingLine,
@@ -152,14 +153,27 @@ export function ChartToolbar({
   useEffect(() => { preloadSounds(); }, []);
   const [showSymbolSearch, setShowSymbolSearch] = useState(false);
   const [symbolFilter, setSymbolFilter] = useState("");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [favoriteSymbols, setFavoriteSymbols] = useState<Set<string>>(() => {
+    const saved = safeStorage.getJSON<unknown>("watchlist_favorites", []);
+    return new Set(Array.isArray(saved) ? saved.filter((value): value is string => typeof value === "string") : []);
+  });
   const network = useHlSession((s) => s.network);
+
+  const openSymbolSearch = () => {
+    const saved = safeStorage.getJSON<unknown>("watchlist_favorites", []);
+    setFavoriteSymbols(new Set(Array.isArray(saved) ? saved.filter((value): value is string => typeof value === "string") : []));
+    setShowSymbolSearch((visible) => !visible);
+  };
 
   const normalizedSymbolFilter = symbolFilter.trim().toLowerCase();
   const filteredSymbols = symbols.filter(
     (s) =>
-      s.name.toLowerCase().includes(normalizedSymbolFilter) ||
-      (s.displayName || "").toLowerCase().includes(normalizedSymbolFilter) ||
-      (s.category || "").toLowerCase().includes(normalizedSymbolFilter),
+      (!favoritesOnly || favoriteSymbols.has(s.name)) && (
+        s.name.toLowerCase().includes(normalizedSymbolFilter) ||
+        (s.displayName || "").toLowerCase().includes(normalizedSymbolFilter) ||
+        (s.category || "").toLowerCase().includes(normalizedSymbolFilter)
+      ),
   );
 
   // Spread in pips/points: (ask - bid) / pipSize. Previously this multiplied
@@ -185,7 +199,7 @@ export function ChartToolbar({
       {/* Symbol Selector — TradingView style */}
       <div className="relative shrink-0">
         <button
-          onClick={() => setShowSymbolSearch((v) => !v)}
+          onClick={openSymbolSearch}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-secondary font-bold text-sm tracking-tight"
         >
           {selectedSymbol}
@@ -222,6 +236,16 @@ export function ChartToolbar({
                     <X className="h-4 w-4" />
                   </button>
                 </div>
+                <button
+                  type="button"
+                  aria-pressed={favoritesOnly}
+                  onClick={() => setFavoritesOnly((value) => !value)}
+                  className={cn("flex items-center gap-2 border-b border-border px-4 py-2 text-sm", favoritesOnly ? "bg-primary/15 text-primary" : "text-muted-foreground")}
+                >
+                  <Star className="h-4 w-4" fill={favoritesOnly ? "currentColor" : "none"} />
+                  Favoritos
+                  <span className="ml-auto text-xs">{favoriteSymbols.size}</span>
+                </button>
                 <div className="flex-1 overflow-y-auto overscroll-contain">
                   {filteredSymbols.length === 0 ? (
                     <div className="px-4 py-8 text-center text-sm text-muted-foreground">
@@ -270,8 +294,22 @@ export function ChartToolbar({
                 onChange={(e) => setSymbolFilter(e.target.value)}
                 className="w-full px-3 py-2 text-sm border-b border-border bg-card"
               />
+              <button
+                type="button"
+                aria-pressed={favoritesOnly}
+                onClick={() => setFavoritesOnly((value) => !value)}
+                className={cn("flex w-full items-center gap-2 border-b border-border px-3 py-1.5 text-xs", favoritesOnly ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-secondary")}
+              >
+                <Star className="h-3.5 w-3.5" fill={favoritesOnly ? "currentColor" : "none"} />
+                Favoritos
+                <span className="ml-auto">{favoriteSymbols.size}</span>
+              </button>
               <div className="max-h-60 overflow-y-auto">
-                {filteredSymbols.map((s) => (
+                {filteredSymbols.length === 0 ? (
+                  <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                    {favoritesOnly ? "Nenhum ativo favorito." : `Nenhum ativo encontrado para “${symbolFilter}”.`}
+                  </div>
+                ) : filteredSymbols.map((s) => (
                   <button
                     key={s.id || s.name}
                     onClick={() => {
