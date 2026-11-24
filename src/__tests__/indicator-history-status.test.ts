@@ -1,0 +1,2 @@
+import {describe,it,expect} from "vitest";import {historyPhase,historyStatusLabel} from "../lib/indicator-sdk/history-status";
+describe("history status",()=>{it("distinguishes empty, error and loaded results",()=>{expect(historyPhase(0)).toBe("empty");expect(historyPhase(50)).toBe("ready");expect(historyPhase(0,"offline")).toBe("error");expect(historyStatusLabel("refreshing")).toBe("Atualizando histórico…");});});

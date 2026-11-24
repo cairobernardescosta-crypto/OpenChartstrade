@@ -16,6 +16,7 @@ import {
 import { toIndicatorCandles } from "./utils.ts";
 import { useOverrides, resolveIndicator, type ChartScope } from "../../lib/indicator-sdk/instances";
 import {useIndicatorAdmin} from "../../lib/indicator-sdk/admin";
+import {publishHistory,retainHistoryStatuses,historyPhase} from "../../lib/indicator-sdk/history-status";
 import {reportIndicator} from "../../lib/indicator-sdk/diagnostics";
 import {AggregationCache,CalculationCache,sharedPrefix} from "../../lib/indicator-sdk/calculation-cache";
 import {IndicatorWorkerClient} from "../../lib/indicator-sdk/worker-client";
@@ -70,16 +71,27 @@ export function useIndicators(
   const colors = visualColors??(isDark ? CHART_COLORS.dark : CHART_COLORS.light);
   const [history,setHistory]=useState<{key:string;rows:Record<string,CandleData[]>;errors?:Record<string,string>}>({key:"",rows:{}});
   const allowedCustom=activeIndicators.filter(x=>x.startsWith("custom:")).slice(0,admin.maxActive);
+  const historyDefinitions=JSON.stringify(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind!=="graphics"&&x.historySource==="independent"&&(x.kind==="session-candle"||x.aggregation!==0)));
+  useEffect(()=>{const entries=JSON.parse(historyDefinitions) as ImportedIndicator[];retainHistoryStatuses(scope,entries.map(x=>x.id));for(const entry of entries)publishHistory(scope,symbol,entry.id,"loading");return()=>retainHistoryStatuses(scope,[]);},[historyDefinitions,scope,symbol,isReplaying]);
   const requestedPeriods=[...new Set(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind!=="graphics"&&x.kind!=="session-candle"&&x.historySource==="independent"&&historyPlan(x.aggregation)).map(x=>x.aggregation+":"+x.gapPolicy))].sort();
   const periods=requestedPeriods.slice(0,6);
   const periodKey=periods.join(",");
   const lastTime=chartData[chartData.length-1]?.time;
   const replayCutoff=isReplaying&&typeof lastTime==="number"?lastTime:0;
   const historyKey=JSON.stringify([symbol,periodKey,isReplaying,replayCutoff]);
-  useEffect(()=>{if(!symbol||!periodKey)return;let stopped=false;let running=false;
-    const refresh=async()=>{if(running)return;running=true;try{const cutoff=isReplaying?replayCutoff:Math.floor(Date.now()/1000);if(!cutoff)return;const results=await Promise.allSettled(periodKey.split(",").map(async raw=>{const [period,policy]=raw.split(":");const n=Number(period);return [raw,await independentHistory.get(symbol,n,cutoff,policy==="utc-weekdays"?"utc-weekdays":"continuous")] as const;}));if(!stopped){const rows:Record<string,CandleData[]>={};const errors:Record<string,string>={};results.forEach((result,index)=>{if(result.status==="fulfilled")rows[result.value[0]]=result.value[1];else errors[periodKey.split(",")[index]!]="Market history unavailable";});setHistory({key:historyKey,rows,errors});}}finally{running=false;}};
+  useEffect(()=>{if(!symbol||!periodKey)return;let stopped=false;let running=false;let loaded=false;
+    const definitions=(JSON.parse(historyDefinitions) as ImportedIndicator[]).filter(x=>x.kind!=="session-candle");
+    const refresh=async()=>{if(running)return;running=true;try{
+      const cutoff=isReplaying?replayCutoff:Math.floor(Date.now()/1000);if(!cutoff)return;
+      for(const entry of definitions){const id=entry.aggregation+":"+entry.gapPolicy;publishHistory(scope,symbol,entry.id,periodKey.split(",").includes(id)?loaded?"refreshing":"loading":"limited");}
+      const results=await Promise.allSettled(periodKey.split(",").map(async raw=>{const [period,policy]=raw.split(":");return [raw,await independentHistory.get(symbol,Number(period),cutoff,policy==="utc-weekdays"?"utc-weekdays":"continuous")] as const;}));
+      if(stopped)return;const rows:Record<string,CandleData[]>={};const errors:Record<string,string>={};
+      results.forEach((result,index)=>{if(result.status==="fulfilled")rows[result.value[0]]=result.value[1];else errors[periodKey.split(",")[index]!]="Não foi possível consultar o histórico de mercado.";});
+      setHistory({key:historyKey,rows,errors});loaded=true;
+      for(const entry of definitions){const id=entry.aggregation+":"+entry.gapPolicy;if(!periodKey.split(",").includes(id))continue;const bars=rows[id]?.length??0;publishHistory(scope,symbol,entry.id,historyPhase(bars,errors[id]),bars,errors[id]);}
+    }finally{running=false;}};
     void refresh();const timer=isReplaying?undefined:setInterval(()=>void refresh(),30000);return()=>{stopped=true;if(timer!==undefined)clearInterval(timer);};
-  },[symbol,periodKey,isReplaying,replayCutoff,historyKey]);
+  },[symbol,periodKey,isReplaying,replayCutoff,historyKey,historyDefinitions,scope]);
 
   useEffect(() => {
     if (!chartRef.current || !candleSeriesRef.current) return;
@@ -147,6 +159,7 @@ export function useIndicators(
           const historyId=entry.aggregation+":"+entry.gapPolicy;
           const bounded=external?(history.key===historyKey?history.rows[historyId]??[]:[]).slice(-admin.maxBars):aggregation.get(entry.aggregation,entry.gapPolicy);
           if(external&&!periods.includes(historyId)){reportIndicator(scope,entry.id,0,0,"Independent period limit reached (6 per chart)");continue;}
+          if(external&&history.key!==historyKey)continue;
           if(external&&(!bounded.length||history.errors?.[historyId])){reportIndicator(scope,entry.id,0,0,history.key!==historyKey?"Loading market history":history.errors?.[historyId]??"No completed market history");continue;}
           const worker=typeof Worker!=="undefined"?(workerRef.current??=new IndicatorWorkerClient()):null;
           const reply=worker?await worker.calculate(entry,bounded):null;
@@ -357,10 +370,10 @@ export function useIndicators(
   const [sessionHistory,setSessionHistory]=useState<{key:string;entries:Record<string,SessionHistory>}>({key:"",entries:{}});
   const sessionDefinitions=JSON.stringify(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind==="session-candle"&&x.historySource==="independent").flatMap(x=>x.sessionSchedule!=="automatic"?[x]:schedules.key===scheduleKey&&schedules.entries[x.id]?[schedules.entries[x.id]!.config]:[]));
   const sessionKey=JSON.stringify([symbol,isReplaying,replayCutoff,sessionDefinitions,admin.maxBars]);
-  useEffect(()=>{const entries=JSON.parse(sessionDefinitions) as ImportedIndicator[];if(!entries.length||!symbol)return;let disposed=false;let busy=false;
+  useEffect(()=>{const entries=JSON.parse(sessionDefinitions) as ImportedIndicator[];if(!entries.length||!symbol)return;let disposed=false;let busy=false;let loaded=false;
     const refresh=async()=>{if(busy)return;busy=true;try{const cutoff=isReplaying?replayCutoff:Math.floor(Date.now()/1000);if(!cutoff)return;
-      const results:Record<string,SessionHistory>={};for(const entry of entries){if(disposed)return;try{results[entry.id]=await sessionHistoryCache.get(symbol,entry,cutoff,admin.maxBars);}catch(e){results[entry.id]={rows:[],step:60,error:String(e),coveredThrough:0};}}
-      if(!disposed){setSessionHistory({key:sessionKey,entries:results});for(const entry of entries){const result=results[entry.id]!;reportIndicator(scope,entry.id,0,result.rows.length,result.error);}}
+      const results:Record<string,SessionHistory>={};for(const entry of entries){if(disposed)return;publishHistory(scope,symbol,entry.id,loaded?"refreshing":"loading");try{results[entry.id]=await sessionHistoryCache.get(symbol,entry,cutoff,admin.maxBars);}catch(e){results[entry.id]={rows:[],step:60,error:String(e),coveredThrough:0};}}
+      if(!disposed){setSessionHistory({key:sessionKey,entries:results});loaded=true;for(const entry of entries){const result=results[entry.id]!;const waiting=result.error==="Aguardando a primeira vela fechada";const limited=result.error==="A sessão excede o limite de histórico disponível";publishHistory(scope,symbol,entry.id,waiting?"empty":limited?"limited":historyPhase(result.rows.length,result.error),result.rows.length,result.error);if(!waiting)reportIndicator(scope,entry.id,0,result.rows.length,result.error);}}
     }finally{busy=false;}};
     void refresh();const timer=isReplaying?undefined:setInterval(()=>void refresh(),15000);return()=>{disposed=true;if(timer!==undefined)clearInterval(timer);};
   },[sessionDefinitions,symbol,isReplaying,replayCutoff,sessionKey,admin.maxBars,scope]);

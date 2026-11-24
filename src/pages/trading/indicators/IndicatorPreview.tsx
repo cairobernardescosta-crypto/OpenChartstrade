@@ -17,9 +17,9 @@ const samples:CandleData[]=Array.from({length:100},(_,i)=>{const open=100+Math.s
 type Props={draft:ImportedIndicator;symbol?:string;timeframe?:string;replay?:boolean;chartCandles?:readonly CandleData[]};
 type Preview={rows:CandleData[];step:number;cutoff:number;config:ImportedIndicator;label:string;error:string;aggregated:boolean};
 export function IndicatorPreview({draft,symbol="",timeframe="1m",replay=false,chartCandles}:Props){
- const admin=useIndicatorAdmin();const [sample,setSample]=useState(false);const [state,setState]=useState<{key:string;value:Preview}|null>(null);
+ const admin=useIndicatorAdmin();const [sample,setSample]=useState(false);const [retry,setRetry]=useState(0);const [state,setState]=useState<{key:string;value:Preview}|null>(null);
  const last=chartCandles?.[chartCandles.length-1]?.time;const replayCutoff=replay?(last??0):0;
- const configKey=JSON.stringify(draft);const key=JSON.stringify([configKey,symbol,timeframe,replay,replayCutoff,sample,admin.maxBars]);
+ const configKey=JSON.stringify(draft);const key=JSON.stringify([configKey,symbol,timeframe,replay,replayCutoff,sample,admin.maxBars,retry]);
  useEffect(()=>{const parsed=indicatorSchema.safeParse(JSON.parse(configKey));if(!parsed.success)return;let disposed=false;const load=async()=>{
  let c=parsed.data;let step=previewStep(timeframe);const cutoff=replay?replayCutoff:Math.floor(Date.now()/1000);let rows:CandleData[]=[];let error="";let aggregated=false;let label=sample?"Amostra ilustrativa · não representa dados de mercado":replay?"Replay · velas fechadas":symbol+" · "+timeframe+" · histórico de mercado";
  try{if(sample){rows=samples;step=60;c={...c,sessionSchedule:"utc-24h",sessionMinutes:"session",aggregation:0};}
@@ -30,10 +30,10 @@ export function IndicatorPreview({draft,symbol="",timeframe="1m",replay=false,ch
  else rows=normalizePreviewCandles(await api.getCandles(symbol,timeframe,Math.min(admin.maxBars,5000),{toMs:cutoff*1000}),step,cutoff,admin.maxBars);
  }catch(e){error=String(e);}if(!disposed)setState({key,value:{rows,step,cutoff:sample?samples[samples.length-1]!.time+60:cutoff,config:c,label,error,aggregated}});};
  const timer=setTimeout(()=>void load(),250);return()=>{disposed=true;clearTimeout(timer);};
- },[key,configKey,symbol,timeframe,replay,replayCutoff,sample,admin.maxBars,chartCandles]);
+ },[key,configKey,symbol,timeframe,replay,replayCutoff,sample,admin.maxBars,chartCandles,retry]);
  const result=indicatorSchema.safeParse(draft);if(!result.success)return <p className="text-xs text-muted-foreground">Corrija as configurações inválidas para visualizar a prévia.</p>;
  const value=state?.key===key?state.value:null;
- return <div className="space-y-1"><label className="block"><input type="checkbox" checked={sample} onChange={e=>setSample(e.target.checked)}/> Amostra ilustrativa</label>{!value?<p>Carregando prévia…</p>:<><p className="text-muted-foreground">{value.label} · {value.rows.length} velas</p>{value.error?<p role="alert">{value.error}</p>:<PreviewPlot data={value}/>}</>}</div>;
+ return <div className="space-y-1"><label className="block"><input type="checkbox" checked={sample} onChange={e=>setSample(e.target.checked)}/> Amostra ilustrativa</label>{!value?<div role="status" aria-busy="true" className="space-y-2"><p>Carregando histórico para a prévia…</p><div className="h-24 animate-pulse rounded bg-secondary/50"/></div>:<><p className="text-muted-foreground">{value.label} · {value.rows.length} velas</p>{value.error?<div role="alert" className="space-y-1"><p>{value.error}</p><button type="button" className="rounded border border-border px-2 py-1" onClick={()=>setRetry(v=>v+1)}>Tentar novamente</button></div>:<><PreviewPlot data={value}/>{!value.rows.length&&<button type="button" className="rounded border border-border px-2 py-1" onClick={()=>setRetry(v=>v+1)}>Consultar novamente</button>}</>}</>}</div>;
 }
 function PreviewPlot({data}:{data:Preview}){
  const {rows,step,cutoff,config:c,aggregated}=data;

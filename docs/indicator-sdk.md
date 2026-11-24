@@ -93,3 +93,6 @@ Painel administrativo separado em limites globais, desempenho por gráfico, segu
 
 ## L04 escopo da edição
 O editor fixa o destino ao abrir (biblioteca global, gráfico principal ou secundário), apresenta aviso e botão de gravação específicos e identifica personalizações ativas ou de versão anterior na lista. A edição individual não grava na biblioteca; alterações de versão concorrentes são rejeitadas. Restaurar configuração individual remove somente o override do gráfico escolhido, mediante confirmação. A definição global continua sujeita às regras existentes de compatibilidade de versão. Validação local pendente.
+
+## L05 estados do histórico
+Estados por indicador, ativo e gráfico: carregando, atualizando, disponível, vazio, erro e limite. Consultas independentes e sessões publicam estados separados dos diagnósticos de cálculo; resultados obsoletos são descartados. A prévia mostra carregamento e permite nova tentativa. Validação local pendente.
