@@ -8,14 +8,14 @@ import type { CandleData } from "../indicators";
 export class SessionCandlePrimitive extends PluginBase {
   private range: SessionRange|null=null;
   private readonly view: ISeriesPrimitivePaneView;
-  constructor(private readonly config:ImportedIndicator,private readonly sourceSeconds=60,private readonly maxBars=5000) {
+  constructor(private readonly config:ImportedIndicator,private readonly sourceSeconds=60,private readonly maxBars=5000,private readonly replayData?:readonly import("lightweight-charts").CandlestickData<Time>[]) {
     super();
     this.view={renderer:()=>({draw:(target:CanvasRenderingTarget2D)=>this.draw(target)} satisfies ISeriesPrimitivePaneRenderer)};
   }
   public override attached(param:Parameters<PluginBase["attached"]>[0]) {super.attached(param);this.refresh();}
   protected override dataUpdated(_scope:DataChangedScope) {this.refresh();}
   private refresh() {
-    const candles:CandleData[]=this.series.data().slice(-this.maxBars).flatMap(x=>typeof x.time==="number" && "open" in x && "close" in x && "high" in x && "low" in x ? [{time:x.time,open:x.open,high:x.high,low:x.low,close:x.close}] : []);
+    const candles:CandleData[]=(this.replayData??this.series.data()).slice(-this.maxBars).flatMap(x=>typeof x.time==="number" && "open" in x && "close" in x && "high" in x && "low" in x ? [{time:x.time,open:x.open,high:x.high,low:x.low,close:x.close}] : []);
     this.range=sessionRange(candles,this.config);
     if(this.range && (candles[0]!.time>this.range.start || this.sourceSeconds>=86400 || this.range.start%this.sourceSeconds!==0 || this.range.end%this.sourceSeconds!==0))this.range=null;this.requestUpdate();
   }
@@ -23,7 +23,7 @@ export class SessionCandlePrimitive extends PluginBase {
   private draw(target:CanvasRenderingTarget2D) {
     const r=this.range;if(!r)return;
     const scale=this.chart.timeScale();
-    const data=this.series.data(); const last=data[data.length-1]; if(!last)return;
+    const data=this.replayData??this.series.data(); const last=data[data.length-1]; if(!last)return;
     const xLast=scale.timeToCoordinate(last.time);if(xLast===null)return;
     const xPrev=data.length>1?scale.timeToCoordinate(data[data.length-2]!.time):null;
     const step=xPrev===null?6:Math.max(1,xLast-xPrev);

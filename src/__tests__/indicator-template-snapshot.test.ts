@@ -1,0 +1,5 @@
+import {describe,it,expect} from "vitest";
+import {indicatorSchema} from "../lib/indicator-sdk/schema";
+import {prepareTemplateSnapshot,buildTemplateSnapshot} from "../lib/indicator-sdk/template-snapshot";
+const entry=indicatorSchema.parse({sdk:1,id:"test",name:"Test",kind:"expression",version:"2.0.0",expression:"close"});
+describe("indicator template snapshots",()=>{it("captures effective settings",()=>expect(buildTemplateSnapshot([entry],[{...entry,expression:"high"}],["custom:test"]).importedOverrides[0]?.expression).toBe("high"));it("preserves installed definition during version conflict",()=>{const old={...entry,version:"1.0.0",expression:"low"};const p=prepareTemplateSnapshot([entry],[old],[],["custom:test"]);expect(p.missing).toEqual([]);expect(p.overrides[0]).toMatchObject({version:"2.0.0",expression:"low"});expect(entry.expression).toBe("close");});it("rejects duplicate definitions",()=>expect(()=>prepareTemplateSnapshot([entry],[entry,entry],[],[])).toThrow());});

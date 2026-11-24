@@ -1421,7 +1421,7 @@ export function ChartPanel({
     [onAddDrawing, pipDigits, timeframe, selectedSymbol],
   );
 
-  useIndicators(chartRef, candleSeriesRef, chartData, activeIndicators, isDark, volumeData, indicatorScope, (TF_INTERVAL_MS[timeframe] ?? 60000)/1000, chartEpoch, volumeSeriesRef);
+  useIndicators(chartRef, candleSeriesRef, chartData, activeIndicators, isDark, volumeData, indicatorScope, (TF_INTERVAL_MS[timeframe] ?? 60000)/1000, chartEpoch, volumeSeriesRef, isReplaying);
 
   // ── Replay trade event markers ─────────────────────────────
   useEffect(() => {

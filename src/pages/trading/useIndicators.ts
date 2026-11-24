@@ -35,6 +35,7 @@ export function useIndicators(
   sourceSeconds=60,
   chartEpoch=0,
   liveVolumeRef?:React.RefObject<ISeriesApi<"Histogram"> | null>,
+  isReplaying=false,
 ): void {
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<"Line"> | ISeriesApi<"Histogram"> | ISeriesApi<"Area">>>(
     new Map(),
@@ -61,7 +62,7 @@ export function useIndicators(
     used.clear();
     const live=source.data().flatMap(c=>typeof c.time==="number"&&"open" in c?[c as CandlestickData<Time>]:[]);
     const vols=liveVolumeRef?.current?.data().flatMap(v=>"value" in v?[{time:v.time,value:v.value}]:[])??volumeData;
-    const indCandles = toIndicatorCandles(live.length?live:chartData, vols);
+    const indCandles = toIndicatorCandles(isReplaying?chartData:live.length?live:chartData, isReplaying?volumeData:vols);
     aggregation.prepare(indCandles.slice(-admin.maxBars),sourceSeconds);
     const activeCustom=new Set(activeIndicators.filter(x=>x.startsWith("custom:")).map(x=>x.slice(7)));
     cache.prune(activeCustom);
@@ -276,7 +277,7 @@ export function useIndicators(
     return()=>{source.unsubscribeDataChanged(schedule);volume?.unsubscribeDataChanged(schedule);if(timer!==undefined)clearTimeout(timer);};
     // chartRef/candleSeriesRef are stable refs; colors derived from isDark dep.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIndicators, chartData, isDark, library, volumeData, overrides, admin, sourceSeconds, chartEpoch, liveVolumeRef, scope]);
+  }, [activeIndicators, chartData, isDark, library, volumeData, overrides, admin, sourceSeconds, chartEpoch, liveVolumeRef, scope, isReplaying]);
 
   useEffect(()=>{const chart=chartRef.current;const seriesMap=indicatorSeriesRef.current;const cache=cacheRef.current;const guard=guardRef.current;const signatures=signaturesRef.current;return()=>{if(chart)for(const series of seriesMap.values()){try{chart.removeSeries(series);}catch{/* disposed */}}seriesMap.clear();cache.clear();guard.reset();signatures.clear();};},[chartEpoch,chartRef]);
 
@@ -284,9 +285,9 @@ export function useIndicators(
     const series = candleSeriesRef.current;
     if (!series) return;
     const allowed=activeIndicators.filter(x=>x.startsWith("custom:")).slice(0,admin.maxActive);
-    const primitives = library.filter(x => allowed.includes(`custom:${x.id}`)).flatMap(x => {const entry=resolveIndicator(x,overrides);if(!entry.visible)return [];const items:import("lightweight-charts").ISeriesPrimitive<Time>[]=[];if(entry.kind==="session-candle")items.push(new SessionCandlePrimitive(entry,sourceSeconds,admin.maxBars));if(entry.graphics.length)items.push(new GraphicPrimitive(entry.graphics));return items;});
+    const primitives = library.filter(x => allowed.includes(`custom:${x.id}`)).flatMap(x => {const entry=resolveIndicator(x,overrides);if(!entry.visible)return [];const items:import("lightweight-charts").ISeriesPrimitive<Time>[]=[];if(entry.kind==="session-candle")items.push(new SessionCandlePrimitive(entry,sourceSeconds,admin.maxBars,isReplaying?chartData:undefined));if(entry.graphics.length)items.push(new GraphicPrimitive(entry.graphics));return items;});
     const attached:typeof primitives=[];
     for (const primitive of primitives) {try{series.attachPrimitive(primitive);attached.push(primitive);}catch(e){console.warn("Indicator attachment failed",e);}}
     return () => { for (const primitive of attached) { try { series.detachPrimitive(primitive); } catch { /* disposed chart */ } } };
-  }, [activeIndicators, library, overrides, admin, chartData.length === 0, sourceSeconds, chartEpoch]);
+  }, [activeIndicators, library, overrides, admin, chartData.length === 0, sourceSeconds, chartEpoch, isReplaying, isReplaying?chartData:undefined]);
 }

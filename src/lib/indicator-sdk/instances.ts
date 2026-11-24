@@ -15,7 +15,7 @@ function commit(next:Overrides){assertOverridesReady();revision++;state=next;per
 export function saveOverride(scope:ChartScope,entry:ImportedIndicator){const v=indicatorSchema.parse(entry);const next=[...state[scope].filter(x=>x.id!==v.id),v];if(next.length>100)throw new Error("Too many overrides");commit({...state,[scope]:next});}
 export function resetOverride(scope:ChartScope,id:string){commit({...state,[scope]:state[scope].filter(x=>x.id!==id)});}
 export function clearOverrides(id:string){commit({primary:state.primary.filter(x=>x.id!==id),secondary:state.secondary.filter(x=>x.id!==id)});}
-export function resolveIndicator(entry:ImportedIndicator,overrides:readonly ImportedIndicator[]){return overrides.find(x=>x.id===entry.id&&x.kind===entry.kind&&x.version===entry.version)??entry;}
+export function resolveIndicator(entry:ImportedIndicator,overrides:readonly ImportedIndicator[]){return overrides.find(x=>x.id===entry.id&&x.version===entry.version)??entry;}
 
 export function exportOverrides(){return JSON.stringify(state);}
 export function restoreOverrides(source:string){if(source.length>2_000_000)throw new Error("Overrides backup too large");commit(validateOverrides(JSON.parse(source)));}
