@@ -3,13 +3,14 @@ import {runBoundedExpression} from "./runtime";
 import {sma,ema} from "../indicators";
 import {aggregateCompleted} from "./aggregate";
 import {parameterValues,type ImportedIndicator} from "./schema";
-const same=(a:CandleData,b:CandleData)=>a.time===b.time&&Object.is(a.open,b.open)&&Object.is(a.high,b.high)&&Object.is(a.low,b.low)&&Object.is(a.close,b.close)&&Object.is(a.volume,b.volume);
+const same=(a:CandleData,b:CandleData)=>a===b||a.time===b.time&&Object.is(a.open,b.open)&&Object.is(a.high,b.high)&&Object.is(a.low,b.low)&&Object.is(a.close,b.close)&&Object.is(a.volume,b.volume);
 export function sharedPrefix(a:readonly CandleData[],b:readonly CandleData[]){let i=0;while(i<Math.min(a.length,b.length)&&same(a[i]!,b[i]!))i++;return i;}
 type Entry={signature:string;input:CandleData[];output:IndicatorPoint[]};
 export class CalculationCache{
  private entries=new Map<string,Entry>();
  stats(){return {entries:this.entries.size,points:[...this.entries.values()].reduce((n,e)=>n+e.input.length+e.output.length,0)};}
  constructor(private maxEntries=12,private maxPoints=100000){}
+ get pointBudget(){return this.maxPoints;}
  calculate(config:ImportedIndicator,bars:CandleData[]):{points:IndicatorPoint[];cached:boolean;incremental:boolean}{
   const signature=JSON.stringify([config.kind,config.period,config.expression,parameterValues(config),config.aggregation,config.historySource]);
   const old=this.entries.get(config.id);

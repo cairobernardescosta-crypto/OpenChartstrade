@@ -48,3 +48,6 @@ Session range freezes through closing and disabled weekdays, resets at the next 
 
 ## Regression protection
 Chart-derived HTF values are aligned at confirmed source close, replay graphics use only the historical slice, independent histories honor administrative limits and active math indicator selection, and cache entries use source-aware keys and LRU refresh. Recovery rejects concurrent edits. Added regression coverage for rewind, close-time alignment and executable imports. Native trading and wallet modules untouched. Local checks pending.
+
+## Resource diagnostics
+The worker queue is limited to four requests and each request to 20,000 candles. Cache diagnostics expose retained points and an approximate 64-byte-per-point budget estimate; this is not measured browser heap usage or a hard process memory limit. A browser Worker cannot enforce an independent absolute heap quota.

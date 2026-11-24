@@ -139,7 +139,7 @@ export function useIndicators(
             area.setData(points);
           }else line(key,{color:entry.color,lineWidth:entry.lineWidth as 1|2|3|4|5,priceScaleId:scaleId}).setData(points);
           guard.success(type);
-          if(admin.diagnostics)reportIndicator(scope,entry.id,reply?.ms??performance.now()-started,bounded.length,"",result.incremental?"incremental":result.cached?"cache":"full");
+          if(admin.diagnostics)reportIndicator(scope,entry.id,reply?.ms??performance.now()-started,bounded.length,"",result.incremental?"incremental":result.cached?"cache":"full",reply?.stats.points??cache.stats().points);
           }catch(e){if(disposed)return;used.delete(type+":"+entry.plot);const failures=guard.fail(type);reportIndicator(scope,entry.id,performance.now()-started,0,(e instanceof Error?e.message:String(e))+(guard.blocked(type)?" — paused after "+failures+" failures":""));}
         }
         continue;

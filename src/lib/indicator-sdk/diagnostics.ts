@@ -1,14 +1,14 @@
 import {useSyncExternalStore} from "react";
 import type {ChartScope} from "./instances";
-export interface IndicatorDiagnostic {id:string;scope:ChartScope;ms:number;bars:number;error:string;failures:number;mode:"full"|"incremental"|"cache";slow:boolean;history:{at:number;message:string}[];}
+export interface IndicatorDiagnostic {id:string;scope:ChartScope;ms:number;bars:number;error:string;failures:number;mode:"full"|"incremental"|"cache";slow:boolean;cachePoints?:number;estimatedBytes?:number;history:{at:number;message:string}[];}
 let rows:IndicatorDiagnostic[]=[];
 const listeners=new Set<()=>void>();
 const subscribe=(fn:()=>void)=>{listeners.add(fn);return()=>{listeners.delete(fn);};};
 const snapshot=()=>rows;
 export function useIndicatorDiagnostics(){return useSyncExternalStore(subscribe,snapshot,snapshot);}
-export function reportIndicator(scope:ChartScope,id:string,ms:number,bars:number,error="",mode:IndicatorDiagnostic["mode"]="full"){
+export function reportIndicator(scope:ChartScope,id:string,ms:number,bars:number,error="",mode:IndicatorDiagnostic["mode"]="full",cachePoints?:number){
  const previous=rows.find(x=>x.id===id&&x.scope===scope);
- rows=[...rows.filter(x=>x.id!==id||x.scope!==scope),{id,scope,ms,bars,error:error.slice(0,300),failures:error?(previous?.failures??0)+1:0,mode,slow:ms>=50,history:error?[...(previous?.history??[]),{at:Date.now(),message:error.slice(0,300)}].slice(-10):previous?.history??[]}].slice(-100);
+ rows=[...rows.filter(x=>x.id!==id||x.scope!==scope),{id,scope,ms,bars,error:error.slice(0,300),failures:error?(previous?.failures??0)+1:0,mode,slow:ms>=50,cachePoints,estimatedBytes:cachePoints===undefined?undefined:cachePoints*64,history:error?[...(previous?.history??[]),{at:Date.now(),message:error.slice(0,300)}].slice(-10):previous?.history??[]}].slice(-100);
  listeners.forEach(fn=>fn());
 }
 export function resetDiagnostics(){rows=[];listeners.forEach(fn=>fn());}
