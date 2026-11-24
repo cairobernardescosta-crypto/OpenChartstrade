@@ -19,7 +19,7 @@ import {useIndicatorAdmin} from "../../lib/indicator-sdk/admin";
 import {reportIndicator} from "../../lib/indicator-sdk/diagnostics";
 import {aggregateCompleted} from "../../lib/indicator-sdk/aggregate";
 import {parameterValues} from "../../lib/indicator-sdk/schema";
-import { expressionPoints } from "../../lib/indicator-sdk/expression";
+import {RuntimeGuard,runBoundedExpression} from "../../lib/indicator-sdk/runtime";
 import { useIndicatorLibrary } from "../../lib/indicator-sdk/storage";
 import {GraphicPrimitive} from "../../lib/indicator-sdk/graphic-renderer";
 import { SessionCandlePrimitive } from "../../lib/indicator-sdk/renderer";
@@ -51,6 +51,7 @@ export function useIndicators(
     const chart = chartRef.current;
     const source=candleSeriesRef.current;
     const used=new Set<string>();
+    const guard=new RuntimeGuard();
     const sync=()=>{
     used.clear();
     const live=source.data().flatMap(c=>typeof c.time==="number"&&"open" in c?[c as CandlestickData<Time>]:[]);
@@ -77,10 +78,12 @@ export function useIndicators(
         const definition = library.find(x => `custom:${x.id}` === type);
         const entry = definition && resolveIndicator(definition,overrides);
         if (entry && entry.visible && entry.kind !== "session-candle" && entry.kind !== "graphics") {
+          if(guard.blocked(type))continue;
           const started=performance.now();
           try {
           const bounded=aggregateCompleted(indCandles.slice(-admin.maxBars),entry.aggregation,sourceSeconds);
-          const data = entry.kind === "expression" ? expressionPoints(bounded,entry.expression,parameterValues(entry)) : (entry.kind === "sma" ? sma : ema)(bounded, entry.period);
+          const data = entry.kind === "expression" ? runBoundedExpression(bounded,entry.expression,parameterValues(entry)) : (entry.kind === "sma" ? sma : ema)(bounded, entry.period);
+          if(performance.now()-started>100)throw new Error("Indicator execution budget exceeded");
           const key=type+":"+entry.plot;
           const points=data.map(p=>({time:p.time as Time,value:p.value}));
           if(entry.plot==="histogram")histogram(key,{color:entry.color,priceScaleId:"right"}).setData(points);
@@ -90,8 +93,9 @@ export function useIndicators(
             if(!area){area=chart.addAreaSeries(options);indicatorSeriesRef.current.set(key,area);}else area.applyOptions(options);
             area.setData(points);
           }else line(key,{color:entry.color,lineWidth:entry.lineWidth as 1|2|3|4|5,priceScaleId:"right"}).setData(points);
+          guard.success(type);
           if(admin.diagnostics)reportIndicator(scope,entry.id,performance.now()-started,bounded.length);
-          }catch(e){used.delete(type+":"+entry.plot);if(admin.diagnostics)reportIndicator(scope,entry.id,performance.now()-started,0,e instanceof Error?e.message:String(e));}
+          }catch(e){used.delete(type+":"+entry.plot);const failures=guard.fail(type);reportIndicator(scope,entry.id,performance.now()-started,0,(e instanceof Error?e.message:String(e))+(guard.blocked(type)?" — paused after "+failures+" failures":""));}
         }
         continue;
       }

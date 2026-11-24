@@ -24,3 +24,6 @@ Bounded expression functions abs/sqrt/log/exp/floor/ceil/round and up to 20 name
 
 ## Calendar and session periods
 Weekly aggregation aligns to Monday UTC; calendar month aggregation uses actual month length, excludes incomplete or gapped buckets, and is computed from loaded chart history. HTF session candles support full session or session-relative intraday segments. Session lines remain visible even when projected candle has no viewport space. Independent external timeframe fetching remains unsupported.
+
+## Restricted runtime guard
+Imported expressions execute only through the bounded interpreter, with a 20,000-bar hard ceiling and cooperative 100 ms deadline checked every 64 bars. SMA/EMA duration is checked after calculation. Three consecutive failures pause the calculation until the hook is recreated (for example, toggling the indicator). Errors remain visible even when success diagnostics are disabled. This is capability restriction, not an arbitrary TypeScript sandbox or a hard browser memory/process limit. No imported code receives wallet, network or storage APIs. Local tests pending.
