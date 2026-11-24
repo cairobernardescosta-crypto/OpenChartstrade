@@ -1,0 +1,7 @@
+import {describe,it,expect} from "vitest";
+import {sessionRange,projectedCandleX} from "../lib/indicator-sdk/session";
+import {indicatorSchema} from "../lib/indicator-sdk/schema";
+const config=indicatorSchema.parse({sdk:1,id:"session",name:"Session",version:"1.0.0",kind:"session-candle",timezone:"UTC",open:"09:00",close:"10:00",days:[1,2,3,4,5]});
+const start=Date.UTC(2026,10,23,9)/1000;
+const bar=(time:number,close=2)=>({time,open:1,high:Math.max(3,close),low:0,close});
+describe("session range lifecycle",()=>{it("freezes at close and resets at next opening",()=>{const rows=[bar(start),bar(start+1800,4),bar(start+3600,99)];expect(sessionRange(rows,config,1800)).toMatchObject({close:4,closed:true,highTime:start+1800});expect(sessionRange([...rows,bar(start+86400)],config,1800)).toMatchObject({close:2,closed:false,start:start+86400});});it("rejects missing opening bar",()=>expect(sessionRange([bar(start+1800)],config,1800)).toBeNull());it("rejects closed incomplete session",()=>expect(sessionRange([bar(start),bar(start+3600)],config,1800)).toBeNull());it("keeps projection inside close boundary",()=>expect(projectedCandleX(100,10,12,8,300,180)).toBe(174));});

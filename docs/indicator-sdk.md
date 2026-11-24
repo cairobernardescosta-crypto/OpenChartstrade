@@ -42,3 +42,6 @@ Templates capture effective imported settings, validate before mutation and reso
 
 ## Independent history
 Optional independent history uses the existing read-only market API, explicit exclusive end times (no extra chart subscriptions), a 16-entry request cache, at most six distinct periods per chart, and 30-second live refresh. Native intervals are requested directly; others derive from hourly or daily candles. Results are aligned to chart bars only after their source close. Replay uses the historical cursor, never wall-clock future candles. Missing history renders no output. Local verification pending.
+
+## HTF session lifecycle
+Session range freezes through closing and disabled weekdays, resets at the next eligible opening, and rejects missing or misaligned source bars when resolution is provided. Full-session boundary lines are independent of intraday HTF segments. Projection is anchored to the last contributing bar and stays inside the session and viewport where space permits. A dashed edge marker indicates offscreen closing time, not its actual chart coordinate. Preview uses actual sample OHLC extrema and configured offset/period. Local visual verification remains pending.
