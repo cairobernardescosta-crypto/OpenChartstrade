@@ -11,7 +11,7 @@ import {usePersistenceError} from "../../../lib/indicator-sdk/database";
 import { useOverrides, saveOverride, resetOverride, clearOverrides, resolveIndicator, type ChartScope } from "../../../lib/indicator-sdk/instances";
 import type { CandleData,IndicatorType } from "../../../lib/indicators";
 import { HTF_EXAMPLE, parseIndicator, indicatorSchema, type ImportedIndicator } from "../../../lib/indicator-sdk/schema";
-import { useIndicatorLibrary, installIndicator, updateIndicator, removeIndicator, duplicateIndicator, versions, restoreVersion, setIndicatorFavorite, getLibraryError } from "../../../lib/indicator-sdk/storage";
+import { useIndicatorLibrary, installIndicator, updateIndicator, removeIndicator, duplicateIndicator, versions, revisionEntries, restoreRevisionEntry, setIndicatorFavorite, getLibraryError } from "../../../lib/indicator-sdk/storage";
 
 export function IndicatorLibraryMenu({active,toggle,scope="primary",symbol="",timeframe="1m",replay=false,previewCandles}:{active: IndicatorType[];toggle:(type:IndicatorType)=>void;scope?:ChartScope;symbol?:string;timeframe?:string;replay?:boolean;previewCandles?:readonly CandleData[]}) {
   const library=useIndicatorLibrary();
@@ -96,7 +96,7 @@ export function IndicatorLibraryMenu({active,toggle,scope="primary",symbol="",ti
           {label:"Exportar (.ts)",run:()=>{const url=URL.createObjectURL(new Blob(["export default "+JSON.stringify(x,null,2)+";"],{type:"text/plain"}));const a=document.createElement("a");a.href=url;a.download=x.id+".ts";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}},
           {label:"Desinstalar",danger:true,run:()=>attempt(()=>{if(!window.confirm("Desinstalar "+x.name+"?"))return;removeIndicator(x.id);clearOverrides(x.id);if(active.includes(id))toggle(id);})}
         ]}/>
-        {revisionId===x.id&&<div className="basis-full space-y-1 rounded border border-border p-2">{versions(x.id).map((v,index)=><div key={index} className="flex items-center gap-2"><span className="flex-1 truncate">{v.name} · {v.version} · revisão {index+1}</span><button onClick={()=>setViewSource("export default "+JSON.stringify(v,null,2)+";")}>Ver</button><button onClick={()=>attempt(()=>{if(window.confirm("Restaurar a revisão selecionada?"))restoreVersion(x.id,index);})}>Restaurar</button></div>)}</div>}
+        {revisionId===x.id&&<div className="basis-full space-y-1 rounded border border-border p-2"><p className="font-medium">Histórico · mais recentes primeiro</p>{revisionEntries(x.id).map(({revision,index})=><div key={index} className="space-y-1 border-t border-border py-2"><p className="font-medium">{revision.definition.name} · v{revision.definition.version}</p><p className="text-muted-foreground">{revision.archivedAt===null?"Revisão antiga · data não registrada":"Arquivada em "+new Date(revision.archivedAt).toLocaleString("pt-BR")}</p><div className="flex gap-2"><button onClick={()=>setViewSource("export default "+JSON.stringify(revision.definition,null,2)+";")}>Ver código</button><button onClick={()=>attempt(()=>{if(window.confirm("Restaurar esta revisão na biblioteca global? A definição atual será arquivada."))restoreRevisionEntry(x.id,index,revision);})}>Restaurar</button></div></div>)}</div>}
 
       </div>;
     })}

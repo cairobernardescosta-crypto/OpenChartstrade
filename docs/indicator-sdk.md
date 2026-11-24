@@ -105,3 +105,6 @@ Um painel reúne exportação de espaço de trabalho e indicadores, seleção e 
 
 ## L08 prévias gráficas
 Prévia SVG separada para os oito tipos de objetos, inclusive indicadores matemáticos com gráficos adicionais. Respeita âncoras OHLC, multiplicador, deslocamento, visibilidade, camadas, cor, opacidade e traçado; sinaliza âncoras indisponíveis e bloqueia deslocamentos futuros no replay. Escala própria, amostragem visual de velas e texto de tabela abreviado; não substitui validação do renderizador principal. Validação local pendente.
+
+## L09 datas das revisões
+Novas revisões registram o instante de arquivamento da definição substituída, em epoch ms. A lista ordena por data decrescente, mantém ordem estável nos empates e exibe revisões legadas sem data depois das datadas. Backups antigos são aceitos e convertidos sem atribuir datas fictícias; backups novos preservam metadados de revisão. A definição exportada em .ts permanece sem metadados de arquivamento. A restauração seleciona a revisão original e rejeita seleção obsoleta, arquivando a definição atual. Limite de 20 mantido. Validação local pendente.
