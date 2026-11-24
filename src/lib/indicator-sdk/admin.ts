@@ -1,8 +1,8 @@
 import {useSyncExternalStore} from "react";
 import {z} from "zod";
-import {persistState,hydrateState} from "./database";
+import {persistState,hydrateState,assertWritable} from "./database";
 export const adminSchema=z.object({maxActive:z.number().int().min(1).max(30).default(10),maxBars:z.number().int().min(100).max(20000).default(5000),diagnostics:z.boolean().default(true)}).strict();
-export type IndicatorAdmin=z.infer<typeof schema>;
+export type IndicatorAdmin=z.infer<typeof adminSchema>;
 const KEY="opencharts.indicator-admin.v1";
 let config=adminSchema.parse({});
 let revision=0;
@@ -11,8 +11,10 @@ const listeners=new Set<()=>void>();
 function subscribe(fn:()=>void){listeners.add(fn);return()=>{listeners.delete(fn);};}
 const snapshot=()=>config;
 export function useIndicatorAdmin(){return useSyncExternalStore(subscribe,snapshot,snapshot);}
-export function saveIndicatorAdmin(next:IndicatorAdmin){const v=adminSchema.parse(next);revision++;persistState(KEY,v);config=v;listeners.forEach(fn=>fn());}
+export function saveIndicatorAdmin(next:IndicatorAdmin){assertWritable();const v=adminSchema.parse(next);revision++;persistState(KEY,v);config=v;listeners.forEach(fn=>fn());}
 
 void hydrateState(KEY,config,raw=>adminSchema.parse(raw),raw=>{config=adminSchema.parse(raw);listeners.forEach(fn=>fn());},()=>revision===0);
 
 export function getIndicatorAdmin(){return config;}
+
+export function applyRestoredAdmin(data:IndicatorAdmin){revision++;config=data;listeners.forEach(fn=>fn());}

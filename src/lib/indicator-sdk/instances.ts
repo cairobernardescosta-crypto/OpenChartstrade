@@ -1,5 +1,5 @@
 import {useSyncExternalStore} from "react";
-import {persistState,hydrateState} from "./database";
+import {persistState,hydrateState,assertWritable} from "./database";
 import {indicatorSchema,type ImportedIndicator} from "./schema";
 export type ChartScope="primary"|"secondary";
 type Overrides=Record<ChartScope,ImportedIndicator[]>;
@@ -11,7 +11,7 @@ const listeners=new Set<()=>void>();
 function subscribe(fn:()=>void){listeners.add(fn);return()=>{listeners.delete(fn);};}
 const snapshot=()=>state;
 export function useOverrides(scope:ChartScope){return useSyncExternalStore(subscribe,snapshot,snapshot)[scope];}
-function commit(next:Overrides){assertOverridesReady();revision++;state=next;persistState(KEY,next);listeners.forEach(f=>f());}
+function commit(next:Overrides){assertOverridesReady();assertWritable();revision++;state=next;persistState(KEY,next);listeners.forEach(f=>f());}
 export function saveOverride(scope:ChartScope,entry:ImportedIndicator){const v=indicatorSchema.parse(entry);const next=[...state[scope].filter(x=>x.id!==v.id),v];if(next.length>100)throw new Error("Too many overrides");commit({...state,[scope]:next});}
 export function resetOverride(scope:ChartScope,id:string){commit({...state,[scope]:state[scope].filter(x=>x.id!==id)});}
 export function clearOverrides(id:string){commit({primary:state.primary.filter(x=>x.id!==id),secondary:state.secondary.filter(x=>x.id!==id)});}
@@ -27,3 +27,5 @@ export function replaceChartOverrides(scope:ChartScope,values:unknown){const row
 let ready=false;
 export function assertOverridesReady(){if(!ready)throw new Error("Chart settings are loading; retry shortly");}
 void hydration.finally(()=>{ready=true;state={...state};listeners.forEach(fn=>fn());});
+
+export function applyRestoredOverrides(data:ReturnType<typeof validateOverrides>){revision++;state=data;listeners.forEach(fn=>fn());}
