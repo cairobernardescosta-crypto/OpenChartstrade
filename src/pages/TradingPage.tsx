@@ -4,15 +4,17 @@ import { MobileAccountBar, MobileTradingPanel } from "../components/MobileTradin
 import { type IndicatorType } from "../lib/indicators.ts";
 import { useCandles } from "../services/queries.ts";
 import { useHoverCollapse } from "../hooks/useHoverCollapse.ts";
+import { useChartDrawings } from "../hooks/useChartDrawings.ts";
 import { safeStorage } from "../lib/safe-storage.ts";
 import type { PlaceOrderInput } from "../services/schemas.ts";
 import { updateChartPreferences,useChartPreferences } from "../hooks/useChartPreferences.ts";
 import { useTradingStore } from "../services/store.tsx";
+import { getWorkspaceMemorySettings } from "../services/workspace-memory.ts";
 import { useTerminal } from "../terminal/use-terminal.ts";
 import { BottomPanel } from "./trading/BottomPanel.tsx";
 import { ChartPanel } from "./trading/ChartPanel.tsx";
 import { ChartToolbar } from "./trading/ChartToolbar.tsx";
-import { REPLAY_ENABLED, type DrawingLine, type DrawingTool, type Timeframe } from "./trading/constants.ts";
+import { REPLAY_ENABLED, type DrawingTool, type Timeframe } from "./trading/constants.ts";
 import { getPipDigits } from "./trading/utils.ts";
 
  // Optional panels are split into separate chunks and fetched only when opened.
@@ -23,6 +25,46 @@ const MarketNewsFeed = lazy(() => import("../components/TradingPowerFeatures.tsx
 const TradingViewTechnicalAnalysis = lazy(() => import("../components/TradingViewWidgets.tsx").then((m) => ({ default: m.TradingViewTechnicalAnalysis })));
 import { MarketClosedBanner } from "./trading/MarketClosedBanner.tsx";
 import { OrderPanel } from "./trading/OrderPanel.tsx";
+
+const SECONDARY_STATE_KEY = "opencharts.workspace.secondary-chart.v1";
+const LAYOUT_STATE_KEY = "opencharts.workspace.layout.v1";
+const INDICATOR_IDS = new Set(["SMA", "EMA", "RSI", "MACD", "BOLL", "ATR", "STOCH", "VWAP"]);
+
+interface SecondaryChartState {
+  symbol?: string;
+  timeframe?: Timeframe;
+  indicators?: IndicatorType[];
+  plugins?: string[];
+}
+interface LayoutState {
+  chartLayout?: "single" | "split";
+  activeChart?: "primary" | "secondary";
+  bottomTab?: "positions" | "orders" | "history" | "journal" | "calendar" | "news";
+  rightPanel?: "order" | "dom" | "watchlist" | "news" | "tv-analysis";
+  showRightPanel?: boolean;
+}
+function readSecondaryState(): SecondaryChartState {
+  const memory = getWorkspaceMemorySettings();
+  if (!memory.restoreSession) return {};
+  const raw = safeStorage.getJSON<unknown>(SECONDARY_STATE_KEY, {});
+  if (!raw || typeof raw !== "object") return {};
+  const row = raw as Record<string, unknown>;
+  const timeframe = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"].includes(String(row.timeframe)) ? row.timeframe as Timeframe : undefined;
+  const indicators = Array.isArray(row.indicators) ? [...new Set(row.indicators.filter((value): value is IndicatorType => typeof value === "string" && (INDICATOR_IDS.has(value) || /^custom:[a-z][a-z0-9-]{0,63}$/.test(value))))] : undefined;
+  const plugins = Array.isArray(row.plugins) ? [...new Set(row.plugins.filter((value): value is string => typeof value === "string" && value.length <= 100))] : undefined;
+  return {
+    symbol: memory.assets && typeof row.symbol === "string" && row.symbol.length <= 200 ? row.symbol : undefined,
+    timeframe: memory.timeframes ? timeframe : undefined,
+    indicators: memory.indicators ? indicators : undefined,
+    plugins: memory.appearance ? plugins : undefined,
+  };
+}
+function readLayoutState(): LayoutState {
+  const memory = getWorkspaceMemorySettings();
+  if (!memory.restoreSession || !memory.layout) return {};
+  const raw = safeStorage.getJSON<unknown>(LAYOUT_STATE_KEY, {});
+  return raw && typeof raw === "object" ? raw as LayoutState : {};
+}
 
 /**
  * The default terminal layout.
@@ -96,29 +138,49 @@ export function TradingPage() {
     deleteJournal,
   } = useTerminal();
 
+  const [initialSecondary] = useState<SecondaryChartState>(readSecondaryState);
+  const [initialLayout] = useState<LayoutState>(readLayoutState);
+
   // ── Layout state ──
   const [showIndicatorMenu, setShowIndicatorMenu] = useState(false);
-  const [chartLayout, setChartLayout] = useState<"single" | "split">("single");
-  const [activeChart, setActiveChart] = useState<"primary" | "secondary">("primary");
+  const [chartLayout, setChartLayout] = useState<"single" | "split">(initialLayout.chartLayout === "split" ? "split" : "single");
+  const [activeChart, setActiveChart] = useState<"primary" | "secondary">(initialLayout.activeChart === "secondary" ? "secondary" : "primary");
   const secondaryPrefs=useChartPreferences("secondary");
   const focusedPrefs=activeChart==="primary"?chartPrefs:secondaryPrefs;
   // The secondary chart owns its market and indicator state. It starts on 1h
   // so split mode is useful immediately for multi-timeframe analysis.
-  const [secondarySymbol, setSecondarySymbol] = useState(selectedSymbol);
-  const [secondaryTimeframe, setSecondaryTimeframe] = useState<Timeframe>("1h");
-  const [secondaryIndicators, setSecondaryIndicators] = useState<IndicatorType[]>([]);
+  const [secondarySymbol, setSecondarySymbol] = useState(initialSecondary.symbol ?? selectedSymbol);
+  const [secondaryTimeframe, setSecondaryTimeframe] = useState<Timeframe>(initialSecondary.timeframe ?? "1h");
+  const [secondaryIndicators, setSecondaryIndicators] = useState<IndicatorType[]>(initialSecondary.indicators ?? []);
   const [secondaryDrawingTool, setSecondaryDrawingTool] = useState<DrawingTool>("none");
-  // The drawings API currently persists by symbol only. Keep this chart's
-  // drawings isolated in memory rather than merging them with the primary chart.
-  const [secondaryDrawings, setSecondaryDrawings] = useState<DrawingLine[]>([]);
-  const [secondaryPlugins, setSecondaryPlugins] = useState<string[]>([]);
+  const {
+    drawings: secondaryDrawings,
+    addDrawing: addSecondaryDrawing,
+    updateDrawing: updateSecondaryDrawing,
+    removeDrawing: removeSecondaryDrawing,
+    clearDrawings: clearSecondaryDrawings,
+  } = useChartDrawings(secondarySymbol, secondaryTimeframe, "secondary");
+  const [secondaryPlugins, setSecondaryPlugins] = useState<string[]>(initialSecondary.plugins ?? secondaryPrefs.activePlugins);
+  const hadStoredSecondaryRef = useRef(Boolean(initialSecondary.symbol));
   // Hyperliquid can replace the initial placeholder symbol after its market
   // list loads. Correct only an invalid secondary symbol; preserve user choice.
   useEffect(() => {
-    if (symbols.length === 0 || symbols.some((symbol) => symbol.name === secondarySymbol)) return;
+    if (hadStoredSecondaryRef.current || symbols.length === 0 || symbols.some((symbol) => symbol.name === secondarySymbol)) return;
     const fallback = symbols.find((symbol) => symbol.name === selectedSymbol)?.name ?? symbols[0]?.name;
     if (fallback) setSecondarySymbol(fallback);
   }, [secondarySymbol, selectedSymbol, symbols]);
+
+  useEffect(() => {
+    const memory = getWorkspaceMemorySettings();
+    const previous = safeStorage.getJSON<SecondaryChartState>(SECONDARY_STATE_KEY, {});
+    safeStorage.setJSON(SECONDARY_STATE_KEY, {
+      ...previous,
+      ...(memory.assets ? { symbol: secondarySymbol } : {}),
+      ...(memory.timeframes ? { timeframe: secondaryTimeframe } : {}),
+      ...(memory.indicators ? { indicators: secondaryIndicators } : {}),
+      ...(memory.appearance ? { plugins: secondaryPlugins } : {}),
+    } satisfies SecondaryChartState);
+  }, [secondarySymbol, secondaryTimeframe, secondaryIndicators, secondaryPlugins]);
 
 
 
@@ -142,14 +204,18 @@ export function TradingPage() {
 
   const [bottomTab, setBottomTab] = useState<
     "positions" | "orders" | "history" | "journal" | "calendar" | "news"
-  >("positions");
+  >(initialLayout.bottomTab ?? "positions");
   const [rightPanel, setRightPanel] = useState<
     "order" | "dom" | "watchlist" | "news" | "tv-analysis"
-  >("order");
-  const [showRightPanel, setShowRightPanel] = useState(true);
+  >(initialLayout.rightPanel ?? "order");
+  const [showRightPanel, setShowRightPanel] = useState(initialLayout.showRightPanel ?? true);
   const rightPanelHover = useHoverCollapse();
   const bottomPanelHover = useHoverCollapse();
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
+
+  useEffect(() => {
+    if (getWorkspaceMemorySettings().layout) safeStorage.setJSON(LAYOUT_STATE_KEY, { chartLayout, activeChart, bottomTab, rightPanel, showRightPanel } satisfies LayoutState);
+  }, [chartLayout, activeChart, bottomTab, rightPanel, showRightPanel]);
 
   // ── Vertical resize: chart vs bottom panel ──
   const [bottomPanelHeight, setBottomPanelHeight] = useState(() => {
@@ -245,21 +311,11 @@ export function TradingPage() {
       prev.includes(type) ? prev.filter((item) => item !== type) : [...prev, type],
     );
   }, []);
-  const addSecondaryDrawing = useCallback((drawing: DrawingLine) => {
-    setSecondaryDrawings((prev) => [...prev, drawing]);
-  }, []);
-  const updateSecondaryDrawing = useCallback((drawing: DrawingLine) => {
-    setSecondaryDrawings((prev) => prev.map((item) => item.id === drawing.id ? drawing : item));
-  }, []);
-  const removeSecondaryDrawing = useCallback((id: string) => {
-    setSecondaryDrawings((prev) => prev.filter((item) => item.id !== id));
-  }, []);
   const toggleSecondaryPlugin = useCallback((id: string) => {
     setSecondaryPlugins((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
   }, []);
-  const clearSecondaryDrawings = useCallback(() => setSecondaryDrawings([]), []);
   const clearSecondaryIndicators = useCallback(() => setSecondaryIndicators([]), []);
 
 

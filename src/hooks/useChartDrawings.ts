@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DrawingLine } from "../pages/trading/constants";
 import { api } from "../services/api";
+import { getWorkspaceMemorySettings } from "../services/workspace-memory.ts";
 
 // One reversible mutation for the undo/redo stacks.
 type HistoryOp =
@@ -19,7 +20,10 @@ function sortByZ(list: DrawingLine[]): DrawingLine[] {
 
 const NO_DRAWINGS: DrawingLine[] = [];
 
-export function useChartDrawings(symbol: string, timeframe: string) {
+export function useChartDrawings(symbol: string, timeframe: string, scope: "primary" | "secondary" = "primary") {
+  // Keep existing primary keys backward compatible. Secondary drawings receive
+  // a stable namespace so the same market can have independent objects in both charts.
+  const storageSymbol = scope === "primary" ? symbol : `secondary:${symbol}`;
   // State is tagged with the symbol it belongs to. Switching symbols therefore
   // needs no reset: drawings loaded for the previous symbol simply stop
   // matching and render as empty until the new set arrives. (The old code
@@ -45,11 +49,19 @@ export function useChartDrawings(symbol: string, timeframe: string) {
   // behavior) — switching TF keeps them in place with no refetch.
   useEffect(() => {
     let cancelled = false;
+    const memory = getWorkspaceMemorySettings();
+    if (!memory.restoreSession || !memory.drawings) {
+      drawingsRef.current = [];
+      void Promise.resolve().then(() => {
+        if (!cancelled) setLoaded({ symbol, list: [] });
+      });
+      return () => { cancelled = true; };
+    }
     // Everything is swapped when the new symbol's drawings land, so the effect
     // body itself stays free of state and ref mutation. Until then the tagged
     // state below renders as empty rather than showing the old symbol's work.
     api.chartDrawings
-      .list(symbol)
+      .list(storageSymbol)
       .then((data) => {
         if (cancelled) return;
         const sorted = sortByZ(data ?? []);
@@ -62,27 +74,27 @@ export function useChartDrawings(symbol: string, timeframe: string) {
     return () => {
       cancelled = true;
     };
-  }, [symbol]);
+  }, [symbol, storageSymbol]);
 
   // ── Primitive applies (state + ref mirror + server, no history) ──
 
   const applyAdd = useCallback((d: DrawingLine) => {
     drawingsRef.current = sortByZ([...drawingsRef.current, d]);
     setDrawings(drawingsRef.current);
-    api.chartDrawings.save(symbol, timeframe, d).catch(() => {});
-  }, [setDrawings, symbol, timeframe]);
+    if (getWorkspaceMemorySettings().drawings) api.chartDrawings.save(storageSymbol, timeframe, d).catch(() => {});
+  }, [setDrawings, storageSymbol, timeframe]);
 
   // The drawings POST endpoint upserts by drawingId, so edits reuse save().
   const applyUpdate = useCallback((d: DrawingLine) => {
     drawingsRef.current = sortByZ(drawingsRef.current.map((x) => (x.id === d.id ? d : x)));
     setDrawings(drawingsRef.current);
-    api.chartDrawings.save(symbol, timeframe, d).catch(() => {});
-  }, [setDrawings, symbol, timeframe]);
+    if (getWorkspaceMemorySettings().drawings) api.chartDrawings.save(storageSymbol, timeframe, d).catch(() => {});
+  }, [setDrawings, storageSymbol, timeframe]);
 
   const applyRemove = useCallback((id: string) => {
     drawingsRef.current = drawingsRef.current.filter((x) => x.id !== id);
     setDrawings(drawingsRef.current);
-    api.chartDrawings.remove(id).catch(() => {});
+    if (getWorkspaceMemorySettings().drawings) api.chartDrawings.remove(id).catch(() => {});
   }, [setDrawings]);
 
   const pushHistory = useCallback((op: HistoryOp) => {
@@ -125,8 +137,8 @@ export function useChartDrawings(symbol: string, timeframe: string) {
     }
     drawingsRef.current = [];
     setDrawings([]);
-    api.chartDrawings.clear(symbol).catch(() => {});
-  }, [pushHistory, setDrawings, symbol]);
+    if (getWorkspaceMemorySettings().drawings) api.chartDrawings.clear(storageSymbol).catch(() => {});
+  }, [pushHistory, setDrawings, storageSymbol]);
 
   // ── Undo / redo ──
 

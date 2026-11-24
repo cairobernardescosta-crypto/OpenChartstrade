@@ -50,7 +50,7 @@ function GenericWatchlistPanel({
   accountId,
   isFeedConnected = true,
 }: WatchlistPanelProps) {
-  const [filter, setFilter] = useState("");
+  const [filter, setFilter] = useState(() => safeStorage.getItem("watchlist_generic_query") ?? "");
   const placeOrder = usePlaceOrder();
 
   const [favorites, setFavorites] = useState<Set<string>>(() => {
@@ -77,7 +77,12 @@ function GenericWatchlistPanel({
     return Array.from(cats).sort();
   }, [symbols]);
 
-  const [selectedCat, setSelectedCat] = useState<string | null>(null);
+  const [selectedCat, setSelectedCatState] = useState<string | null>(() => safeStorage.getItem("watchlist_generic_category"));
+  const setSelectedCat = useCallback((value: string | null) => {
+    setSelectedCatState(value);
+    if (value == null) safeStorage.removeItem("watchlist_generic_category");
+    else safeStorage.setItem("watchlist_generic_category", value);
+  }, []);
 
   const filtered = useMemo(() => {
     return symbols
@@ -104,7 +109,7 @@ function GenericWatchlistPanel({
         <input
           placeholder="Search..."
           value={filter}
-          onChange={(e) => setFilter(e.target.value)}
+          onChange={(e) => { setFilter(e.target.value); safeStorage.setItem("watchlist_generic_query", e.target.value); }}
           className="w-full text-xs"
         />
       </div>

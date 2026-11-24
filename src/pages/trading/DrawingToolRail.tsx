@@ -24,6 +24,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useDragOffset } from "../../hooks/useDragOffset.ts";
 import { cn } from "../../lib/utils.ts";
+import { safeStorage } from "../../lib/safe-storage.ts";
 import type { DrawingTool } from "./constants.ts";
 
 interface ToolMeta {
@@ -161,7 +162,7 @@ export function DrawingToolRail({
   onDrawingTool: (t: DrawingTool) => void;
 }) {
   const [openGroup, setOpenGroup] = useState<string | null>(null);
-  const [hidden, setHidden] = useState(false);
+  const [hidden, setHidden] = useState(() => safeStorage.getItem("opencharts.drawing-rail.hidden") === "true");
   const ref = useRef<HTMLDivElement>(null);
   const drag = useDragOffset();
 
@@ -182,6 +183,7 @@ export function DrawingToolRail({
   const hide = () => {
     setOpenGroup(null);
     setHidden(true);
+    safeStorage.setItem("opencharts.drawing-rail.hidden", "true");
   };
 
   // Collapsed: a small restorable button where the rail was last positioned.
@@ -190,7 +192,7 @@ export function DrawingToolRail({
       <button
         type="button"
         title="Show drawing tools"
-        onClick={() => setHidden(false)}
+        onClick={() => { setHidden(false); safeStorage.setItem("opencharts.drawing-rail.hidden", "false"); }}
         style={drag.style}
         className="absolute left-1 top-1 z-20 rounded-md border border-border bg-card/90 p-1.5 text-muted-foreground backdrop-blur-sm hover:text-primary"
       >

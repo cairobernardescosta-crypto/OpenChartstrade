@@ -2,6 +2,7 @@ import {
   CandlestickChart,
   Crosshair,
   GripVertical,
+  HardDrive,
   Newspaper,
   Palette,
   RotateCcw,
@@ -17,6 +18,7 @@ import { cn } from "../../lib/utils.ts";
 import { CHART_COLORS, type ChartColors } from "./constants.ts";
 import { playSound } from "../../services/audio.ts";
 import { SoundSettingsTab } from "./SoundSettingsTab.tsx";
+import { WorkspaceMemoryTab } from "./WorkspaceMemoryTab.tsx";
 
 // ── Chart Settings dialog ─────────────────────────────────────────────────────
 // Opened from the chart context menu. Every control writes straight through
@@ -39,7 +41,7 @@ export interface ChartSettingsDialogProps {
   hasAccount: boolean;
 }
 
-type TabId = "appearance" | "colors" | "trading" | "events" | "sounds" | "challenge";
+type TabId = "appearance" | "colors" | "trading" | "events" | "sounds" | "memory" | "challenge";
 
 const TABS: Array<{ id: TabId; label: string; icon: ReactNode }> = [
   { id: "appearance", label: "Appearance", icon: <CandlestickChart className="h-3.5 w-3.5" /> },
@@ -47,6 +49,7 @@ const TABS: Array<{ id: TabId; label: string; icon: ReactNode }> = [
   { id: "trading", label: "Trading", icon: <Crosshair className="h-3.5 w-3.5" /> },
   { id: "events", label: "Events", icon: <Newspaper className="h-3.5 w-3.5" /> },
   { id: "sounds", label: "Efeitos sonoros", icon: <Volume2 className="h-3.5 w-3.5" /> },
+  { id: "memory", label: "Memória do ambiente", icon: <HardDrive className="h-3.5 w-3.5" /> },
   { id: "challenge", label: "Challenge", icon: <Target className="h-3.5 w-3.5" /> },
 ];
 
@@ -500,6 +503,7 @@ function TabBody({
     );
   }
   if (tab === "sounds") return <SoundSettingsTab />;
+  if (tab === "memory") return <WorkspaceMemoryTab />;
   return <ChallengeTab prefs={props.prefs} hasAccount={props.hasAccount} />;
 }
 

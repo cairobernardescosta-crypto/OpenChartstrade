@@ -31,7 +31,7 @@ function readAll(): ChartTemplate[] {
   }
 }
 function writeAll(list: ChartTemplate[]): void {
-  safeStorage.setItem(KEY, JSON.stringify(list));
+  if (!safeStorage.setJSON(KEY, list)) throw new Error("Could not persist templates");
 }
 
 export const chartTemplatesApi = {
@@ -41,12 +41,13 @@ export const chartTemplatesApi = {
 
   /** Upserts by name (unique per user). */
   save: (name: string, content: ChartTemplateContent, isDefault = false) => {
+    const previous = readAll().find((t) => t.name === name);
     const list = readAll().filter((t) => t.name !== name);
     const template: ChartTemplate = {
-      id: crypto.randomUUID(),
+      id: previous?.id ?? crypto.randomUUID(),
       name,
       layoutType: "SINGLE",
-      isDefault,
+      isDefault: isDefault || previous?.isDefault === true,
       panels: [content],
       updatedAt: new Date().toISOString(),
     };

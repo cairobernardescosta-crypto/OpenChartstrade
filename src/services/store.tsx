@@ -4,6 +4,13 @@ import { wsClient } from "./ws.ts";
 import type { Account, Order, Position, Symbol, User } from "./schemas.ts";
 import { safeStorage } from "../lib/safe-storage.ts";
 import { isHyperliquidMode } from "../hyperliquid/ui/mode.ts";
+import { getWorkspaceMemorySettings } from "./workspace-memory.ts";
+
+const PRIMARY_SYMBOL_KEY = "opencharts.workspace.primary-symbol.v1";
+const storedPrimarySymbol = () => {
+  const memory = getWorkspaceMemorySettings();
+  return memory.restoreSession && memory.assets ? safeStorage.getItem(PRIMARY_SYMBOL_KEY)?.trim() || "BTCUSD" : "BTCUSD";
+};
 
 type LoginMfaResponse = {
   mfaRequired: true;
@@ -334,7 +341,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   positions: [],
   orders: [],
   symbols: [],
-  selectedSymbol: "BTCUSD",
+  selectedSymbol: storedPrimarySymbol(),
   ticks: {},
   liveTicks: {},
   liveCandleUpdates: {},
@@ -389,10 +396,13 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   loadSymbols: async () => {
     const symbols = await api.getSymbols();
     set({ symbols });
-    // Hyperliquid has no demo "BTCUSD": land on a real market (prefer BTC) once symbols load.
+    // Hyperliquid has no demo "BTCUSD": choose a real market only when there is no
+    // explicit saved choice. A temporarily unavailable saved HIP-3 market must not
+    // be erased before the provider catalogue has had a chance to recover.
     if (isHyperliquidMode() && symbols.length > 0) {
       const cur = get().selectedSymbol;
-      if (!symbols.some((x) => x.name === cur)) {
+      const hasSavedChoice = safeStorage.getItem(PRIMARY_SYMBOL_KEY) !== null;
+      if (!hasSavedChoice && !symbols.some((x) => x.name === cur)) {
         const pick = symbols.find((x) => x.name === "BTC") ?? symbols[0];
         if (pick) get().setSelectedSymbol(pick.name);
       }
@@ -483,12 +493,14 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     }));
   },
 
-  setSelectedSymbol: (symbol) =>
+  setSelectedSymbol: (symbol) => {
+    if (getWorkspaceMemorySettings().assets) safeStorage.setItem(PRIMARY_SYMBOL_KEY, symbol);
     set((state) =>
       state.selectedSymbol === symbol
         ? { selectedSymbol: symbol }
         : { selectedSymbol: symbol, liveCandleUpdates: {} },
-    ),
+    );
+  },
   setPositions: (positions) => set({ positions }),
   setOrders: (orders) => set({ orders }),
   setReplaySessionDate: (date) => set({ replaySessionDate: date }),

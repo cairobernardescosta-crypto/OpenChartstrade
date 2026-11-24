@@ -12,7 +12,7 @@ export function inspectBackup(source:string):Inspection{
  if(source.length>MAX_BACKUP_SIZE)throw Error("Backup too large");
  const raw=JSON.parse(source);
  if(raw?.format==="opencharts-indicators"){
- const v=validateIndicatorBackup(source);const kind=raw.version===2?"workspace":"indicators";
+ const v=validateIndicatorBackup(source);const kind=raw.version===2||raw.version===3?"workspace":"indicators";
  return {kind,summary:v.library.indicators.length+" indicadores · "+(v.overrides.primary.length+v.overrides.secondary.length)+" personalizações"+(kind==="workspace"?" · "+(v.templates?.length??0)+" modelos · "+(v.drawings?.reduce((n,g)=>n+g.drawings.length,0)??0)+" desenhos":""),confirmation:"Substituir biblioteca, revisões, personalizações dos dois gráficos e administração"+(kind==="workspace"?", mesclando modelos e desenhos salvos":"")+"?"};
  }
  if(raw?.sdk===1){const v=validateLibraryBackup(source);return {kind:"library",summary:v.indicators.length+" indicadores",confirmation:"Substituir a biblioteca e suas revisões? As personalizações não serão restauradas por este arquivo."};}

@@ -20,6 +20,8 @@ const ROW_HEIGHT = 46;
 /** Used until the real viewport is measured (and in environments with no layout). */
 const FALLBACK_VIEWPORT = 480;
 const FAVORITES_KEY = "watchlist_favorites";
+const FILTER_KEY = "watchlist_hl_filter";
+const QUERY_KEY = "watchlist_hl_query";
 
 const TABS: ReadonlyArray<{ id: WatchlistFilter; label: string }> = [
   { id: "all", label: "All" },
@@ -33,8 +35,11 @@ function loadFavorites(): Set<string> {
 }
 
 export function HlWatchlist({ symbols, ticks, selectedSymbol, onSelect }: WatchlistPanelProps) {
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<WatchlistFilter>("all");
+  const [query, setQueryState] = useState(() => safeStorage.getItem(QUERY_KEY) ?? "");
+  const savedFilter = safeStorage.getItem(FILTER_KEY);
+  const [filter, setFilterState] = useState<WatchlistFilter>(() => TABS.some((tab) => tab.id === savedFilter) ? savedFilter as WatchlistFilter : "all");
+  const setQuery = useCallback((value: string) => { setQueryState(value); safeStorage.setItem(QUERY_KEY, value); }, []);
+  const setFilter = useCallback((value: WatchlistFilter) => { setFilterState(value); safeStorage.setItem(FILTER_KEY, value); }, []);
   // Favourites are a device preference, deliberately not routed through the account storage driver.
   const [favorites, setFavorites] = useState<Set<string>>(loadFavorites);
   const [scrollTop, setScrollTop] = useState(0);

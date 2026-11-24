@@ -38,6 +38,7 @@ import {
 import type { Order, PlaceOrderInput, Position, Symbol } from "../services/schemas.ts";
 import { useTradingStore } from "../services/store.tsx";
 import { toast } from "../services/toast.ts";
+import { getWorkspaceMemorySettings } from "../services/workspace-memory.ts";
 import {
   type DrawingTool,
   type MagnetMode,
@@ -63,8 +64,22 @@ import { getPipDigits } from "../pages/trading/utils.ts";
 
 /** Stored timeframe for a symbol, or the 15m default. */
 function readStoredTimeframe(symbol: string): Timeframe {
-  const saved = safeStorage.getItem(`tf_${symbol}`);
+  const memory = getWorkspaceMemorySettings();
+  if (!memory.restoreSession || !memory.timeframes) return "15m";
+  const saved = safeStorage.getItem(`opencharts.workspace.primary-timeframe.${symbol}`)
+    ?? safeStorage.getItem(`tf_${symbol}`);
   return saved && TIMEFRAMES.includes(saved as Timeframe) ? (saved as Timeframe) : "15m";
+}
+
+const PRIMARY_INDICATORS_KEY = "opencharts.workspace.primary-indicators.v1";
+function readStoredIndicators(): IndicatorType[] {
+  const memory = getWorkspaceMemorySettings();
+  if (!memory.restoreSession || !memory.indicators) return [];
+  const raw = safeStorage.getJSON<unknown>(PRIMARY_INDICATORS_KEY, []);
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.filter((value): value is IndicatorType =>
+    typeof value === "string" && (/^custom:[a-z][a-z0-9-]{0,63}$/.test(value)
+      || ["SMA", "EMA", "RSI", "MACD", "BOLL", "ATR", "STOCH", "VWAP"].includes(value))))];
 }
 
 function getErrorMessage(err: unknown): string {
@@ -121,20 +136,28 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const setTimeframe = useCallback(
     (tf: Timeframe) => {
       setTimeframeBySymbol((prev) => ({ ...prev, [selectedSymbol]: tf }));
-      safeStorage.setItem(`tf_${selectedSymbol}`, tf);
+      if (getWorkspaceMemorySettings().timeframes) {
+        safeStorage.setItem(`opencharts.workspace.primary-timeframe.${selectedSymbol}`, tf);
+        safeStorage.setItem(`tf_${selectedSymbol}`, tf);
+      }
     },
     [selectedSymbol],
   );
 
   // ── Chart configuration
   const chartPrefs = useChartPreferences();
-  const [activeIndicators, setActiveIndicators] = useState<IndicatorType[]>([]);
+  const [activeIndicators, setActiveIndicators] = useState<IndicatorType[]>(readStoredIndicators);
   const toggleIndicator = useCallback((type: IndicatorType) => {
-    setActiveIndicators((prev) =>
-      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
-    );
+    setActiveIndicators((prev) => {
+      const next = prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type];
+      if (getWorkspaceMemorySettings().indicators) safeStorage.setJSON(PRIMARY_INDICATORS_KEY, next);
+      return next;
+    });
   }, []);
-  const clearIndicators = useCallback(() => setActiveIndicators([]), []);
+  const clearIndicators = useCallback(() => {
+    if (getWorkspaceMemorySettings().indicators) safeStorage.setJSON(PRIMARY_INDICATORS_KEY, []);
+    setActiveIndicators([]);
+  }, []);
 
   const [activePlugins, setActivePlugins] = useState<string[]>(
     () => getChartPreferencesFromStorage().activePlugins,
