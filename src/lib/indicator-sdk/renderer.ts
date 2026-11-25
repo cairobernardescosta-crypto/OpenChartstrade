@@ -4,12 +4,13 @@ import { PluginBase } from "../chart-plugins/plugin-base";
 import type { ImportedIndicator } from "./schema";
 import { sessionRange, sessionPeriodLabel, projectedCandleX, type SessionRange } from "./session";
 import type { CandleData } from "../indicators";
+import type {BestHoursAnalysis} from "./best-hours";
 
 export class SessionCandlePrimitive extends PluginBase {
   private range: SessionRange|null=null;
   private timer:ReturnType<typeof setInterval>|undefined;
   private readonly view: ISeriesPrimitivePaneView;
-  constructor(private readonly config:ImportedIndicator,private readonly sourceSeconds=60,private readonly maxBars=5000,private readonly replayData?:readonly import("lightweight-charts").CandlestickData<Time>[],private readonly independentData?:readonly CandleData[],private readonly independentSeconds=60) {
+  constructor(private readonly config:ImportedIndicator,private readonly sourceSeconds=60,private readonly maxBars=5000,private readonly replayData?:readonly import("lightweight-charts").CandlestickData<Time>[],private readonly independentData?:readonly CandleData[],private readonly independentSeconds=60,private readonly bestHours?:BestHoursAnalysis,private readonly bestHourCandles:readonly CandleData[]=[]) {
     super();
     this.view={renderer:()=>({draw:(target:CanvasRenderingTarget2D)=>this.draw(target)} satisfies ISeriesPrimitivePaneRenderer)};
   }
@@ -49,7 +50,9 @@ export class SessionCandlePrimitive extends PluginBase {
       ctx.strokeStyle=r.close>=r.open?this.config.color:this.config.downColor;ctx.fillStyle=ctx.strokeStyle;
       if(showProjected&&this.config.showCandle&&this.config.showWicks)line(x,yH,x,yL);
       if(showProjected&&this.config.showCandle)ctx.fillRect(x-this.config.width/2,Math.min(yO,yC),this.config.width,Math.max(1,Math.abs(yO-yC)));
-      if(showProjected&&this.config.showLabels){const label=sessionPeriodLabel(this.config)+(r.closed?"":" · partial");ctx.font="11px sans-serif";ctx.textAlign="center";ctx.fillText(label,x,yH-7);ctx.fillText(label,x,yL+14);}ctx.restore();
+      if(showProjected&&this.config.showLabels){const label=sessionPeriodLabel(this.config)+(r.closed?"":" · partial");ctx.font="11px sans-serif";ctx.textAlign="center";ctx.fillText(label,x,yH-7);ctx.fillText(label,x,yL+14);}
+      if(this.config.bestHoursEnabled&&this.bestHours){const ranked=this.bestHours.ranking.slice(0,this.config.bestHoursCount);const formatter=new Intl.DateTimeFormat("en-GB",{timeZone:this.config.timezone,hour:"2-digit",hourCycle:"h23"});const sessionStart=r.sessionStart??r.start,sessionEnd=r.sessionEnd??r.end;ctx.strokeStyle=this.config.bestHoursLineColor;ctx.fillStyle=this.config.bestHoursLineColor;ctx.lineWidth=this.config.bestHoursLineWidth;ctx.globalAlpha=this.config.bestHoursOpacity;const dash=this.config.bestHoursLineStyle==="dotted"?[2,3]:this.config.bestHoursLineStyle==="dashed"?[6,4]:[];for(const [index,result] of ranked.entries()){const candle=this.bestHourCandles.find(row=>row.time>=sessionStart&&row.time+3600<=sessionEnd&&Number(formatter.format(new Date(row.time*1000)))===result.hour);if(!candle)continue;const startX=timeX(Math.max(candle.time,sessionStart)),endX=timeX(Math.min(candle.time+3600,sessionEnd)),priceY=this.series.priceToCoordinate(candle.open);if(startX===null||endX===null||priceY===null)continue;line(startX,priceY,endX,priceY,dash);if(this.config.bestHoursLabels){ctx.font="10px sans-serif";ctx.textAlign="left";ctx.fillText(`${result.startLabel}–${result.endLabel} | ${index+1}º | ${result.mean.toFixed(2)}% | ${this.bestHours.period}d`,Math.max(2,startX+3),priceY-4);}}}
+      ctx.restore();
     });
   }
 }

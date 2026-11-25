@@ -35,6 +35,8 @@ import {IndependentHistoryCache,historyPlan,historyMaxAge,historyPointExpiry} fr
 import type {CandleData} from "../../lib/indicators";
 import {IndicatorPanes,nativePaneKey,type PaneColors} from "./indicator-panes";
 import { CHART_COLORS } from "./constants.ts";
+import {analyzeBestHours,type BestHoursAnalysis} from "../../lib/indicator-sdk/best-hours.ts";
+import {publishBestHours,retainBestHours} from "../../lib/indicator-sdk/best-hours-status.ts";
 
 
 
@@ -379,13 +381,20 @@ export function useIndicators(
     }finally{busy=false;}};
     void refresh();const timer=isReplaying?undefined:setInterval(()=>void refresh(),15000);return()=>{disposed=true;if(timer!==undefined)clearInterval(timer);};
   },[sessionDefinitions,symbol,isReplaying,replayCutoff,sessionKey,admin.maxBars,scope,sessionHistoryCache]);
+  const bestHoursDefinitions=JSON.stringify(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind==="session-candle"&&x.bestHoursEnabled).flatMap(x=>x.sessionSchedule!=="automatic"?[x]:schedules.key===scheduleKey&&schedules.entries[x.id]?[schedules.entries[x.id]!.config]:[]));
+  const bestHoursKey=JSON.stringify([symbol,isReplaying,replayCutoff,bestHoursDefinitions,adapterToken]);
+  const [bestHours,setBestHours]=useState<{key:string;entries:Record<string,{analysis:BestHoursAnalysis;rows:CandleData[]}>}>({key:"",entries:{}});
+  useEffect(()=>{const entries=JSON.parse(bestHoursDefinitions) as ImportedIndicator[];retainBestHours(scope,entries.map(entry=>entry.id));if(!entries.length||!symbol||!adapter)return;let disposed=false;let busy=false;
+    const refresh=async()=>{if(busy)return;busy=true;const cutoff=isReplaying?replayCutoff:Math.floor(Date.now()/1000);try{const rows=[...await adapter.marketData.getCandles({symbol,timeframe:"1h",limit:Math.min(720,admin.maxBars),toMs:cutoff*1000})] as CandleData[];const values:Record<string,{analysis:BestHoursAnalysis;rows:CandleData[]}>={};for(const entry of entries){const analysis=analyzeBestHours(rows,entry,entry.bestHoursPeriod,cutoff);values[entry.id]={analysis,rows};publishBestHours({scope,symbol,id:entry.id,analysis,error:"",updatedAt:Date.now()});}if(!disposed)setBestHours({key:bestHoursKey,entries:values});}catch(error){const message=error instanceof Error?error.message:String(error);for(const entry of entries)publishBestHours({scope,symbol,id:entry.id,error:message,updatedAt:Date.now()});}finally{busy=false;}};
+    void refresh();const timer=isReplaying?undefined:setInterval(()=>void refresh(),60000);return()=>{disposed=true;if(timer!==undefined)clearInterval(timer);};
+  },[bestHoursDefinitions,bestHoursKey,symbol,isReplaying,replayCutoff,adapterToken,adapter,admin.maxBars,scope]);
   useEffect(() => {
     const series = candleSeriesRef.current;
     if (!series) return;
     const allowed=activeIndicators.filter(x=>x.startsWith("custom:")).slice(0,admin.maxActive);
-    const primitives = library.filter(x => allowed.includes(`custom:${x.id}`)).flatMap(x => {const raw=resolveIndicator(x,overrides);if(!raw.visible)return [];const resolved=schedules.key===scheduleKey?schedules.entries[raw.id]:undefined;const entry=raw.sessionSchedule==="automatic"?(resolved?.config??{...raw,sessionSchedule:"manual" as const}):raw;const items:import("lightweight-charts").ISeriesPrimitive<Time>[]=[];if(raw.sessionSchedule==="automatic"&&!resolved)return [];if(entry.kind==="session-candle")items.push(new SessionCandlePrimitive(entry,sourceSeconds,admin.maxBars,replaySlice,entry.historySource==="independent"?(sessionHistory.key===sessionKey?sessionHistory.entries[entry.id]?.rows??[]:[]):undefined,sessionHistory.entries[entry.id]?.step??60));if(entry.graphics.length)items.push(new GraphicPrimitive(entry.graphics,replaySlice));return items;});
+    const primitives = library.filter(x => allowed.includes(`custom:${x.id}`)).flatMap(x => {const raw=resolveIndicator(x,overrides);if(!raw.visible)return [];const resolved=schedules.key===scheduleKey?schedules.entries[raw.id]:undefined;const entry=raw.sessionSchedule==="automatic"?(resolved?.config??{...raw,sessionSchedule:"manual" as const}):raw;const items:import("lightweight-charts").ISeriesPrimitive<Time>[]=[];if(raw.sessionSchedule==="automatic"&&!resolved)return [];const ranked=bestHours.key===bestHoursKey?bestHours.entries[entry.id]:undefined;if(entry.kind==="session-candle")items.push(new SessionCandlePrimitive(entry,sourceSeconds,admin.maxBars,replaySlice,entry.historySource==="independent"?(sessionHistory.key===sessionKey?sessionHistory.entries[entry.id]?.rows??[]:[]):undefined,sessionHistory.entries[entry.id]?.step??60,ranked?.analysis,ranked?.rows));if(entry.graphics.length)items.push(new GraphicPrimitive(entry.graphics,replaySlice));return items;});
     const attached:typeof primitives=[];
     for (const primitive of primitives) {try{series.attachPrimitive(primitive);attached.push(primitive);}catch(e){console.warn("Indicator attachment failed",e);}}
     return () => { for (const primitive of attached) { try { series.detachPrimitive(primitive); } catch { /* disposed chart */ } } };
-  }, [activeIndicators, library, overrides, admin, sourceSeconds, chartEpoch, isReplaying, replaySlice,sessionHistory,sessionKey,schedules,scheduleKey]);
+  }, [activeIndicators, library, overrides, admin, sourceSeconds, chartEpoch, isReplaying, replaySlice,sessionHistory,sessionKey,schedules,scheduleKey,bestHours,bestHoursKey]);
 }

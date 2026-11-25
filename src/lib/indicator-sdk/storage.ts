@@ -8,7 +8,8 @@ let library:ImportedIndicator[]=[];
 let history:Record<string,IndicatorRevision[]>=Object.create(null) as Record<string,IndicatorRevision[]>;
 let error="";
 let revision=0;
-try{const raw=localStorage.getItem(KEY);if(raw)library=indicatorSchema.array().max(100).parse(JSON.parse(raw));const h=localStorage.getItem(HISTORY);if(h){const value=JSON.parse(h) as Record<string,unknown>;for(const [id,rows] of Object.entries(value)){if(/^[a-z][a-z0-9-]{0,63}$/.test(id)&&id!=="constructor")history[id]=parseRevisions(rows).filter(x=>x.definition.id===id);}}}catch(e){error=String(e);}
+function migrateDefinitions(raw:unknown){if(!Array.isArray(raw))return raw;return raw.map(value=>value&&typeof value==="object"&&(value as {id?:unknown}).id==="htf-candle-range"&&!Object.hasOwn(value,"bestHoursEnabled")?{...value,bestHoursEnabled:true}:value);}
+try{const raw=localStorage.getItem(KEY);if(raw)library=indicatorSchema.array().max(100).parse(migrateDefinitions(JSON.parse(raw)));const h=localStorage.getItem(HISTORY);if(h){const value=JSON.parse(h) as Record<string,unknown>;for(const [id,rows] of Object.entries(value)){if(/^[a-z][a-z0-9-]{0,63}$/.test(id)&&id!=="constructor")history[id]=parseRevisions(rows).filter(x=>x.definition.id===id);}}}catch(e){error=String(e);}
 const listeners=new Set<()=>void>();
 function subscribe(fn:()=>void){listeners.add(fn);return ()=>{listeners.delete(fn);};}
 export function getLibrary(){return library;}
@@ -27,7 +28,7 @@ export function exportLibrary(){return JSON.stringify({sdk:1,indicators:library,
 export function restoreLibrary(source:string){assertLibraryReady();assertWritable();const data=validateLibraryBackup(source);history=data.history;persistState(HISTORY,history);save(data.indicators);}
 
 const initialRevision=revision;
-function validRows(raw:unknown){const rows=indicatorSchema.array().max(100).parse(raw);if(new Set(rows.map(x=>x.id)).size!==rows.length)throw new Error("Duplicate indicator IDs");return rows;}
+function validRows(raw:unknown){const rows=indicatorSchema.array().max(100).parse(migrateDefinitions(raw));if(new Set(rows.map(x=>x.id)).size!==rows.length)throw new Error("Duplicate indicator IDs");return rows;}
 const libraryHydration=hydrateState(KEY,library,validRows,raw=>{library=validRows(raw);listeners.forEach(fn=>fn());},()=>revision===initialRevision);
 function validHistory(raw:unknown){const result:Record<string,IndicatorRevision[]>=Object.create(null) as Record<string,IndicatorRevision[]>;if(!raw||typeof raw!=="object")throw new Error("Invalid history");for(const [id,items] of Object.entries(raw).slice(0,100)){if(/^[a-z][a-z0-9-]{0,63}$/.test(id))result[id]=parseRevisions(items).filter(x=>x.definition.id===id);}return result;}
 const historyHydration=hydrateState(HISTORY,history,validHistory,raw=>{history=validHistory(raw);library=[...library];listeners.forEach(fn=>fn());},()=>revision===initialRevision);

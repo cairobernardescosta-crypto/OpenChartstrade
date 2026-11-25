@@ -50,6 +50,14 @@ export const indicatorSchema = z.object({
   showOpen: z.boolean().default(true),
   showClose: z.boolean().default(true),
   showHighLow: z.boolean().default(true),
+  bestHoursEnabled: z.boolean().default(false),
+  bestHoursPeriod: z.union([z.literal(1),z.literal(7),z.literal(15),z.literal(30)]).default(7),
+  bestHoursCount: z.union([z.literal(1),z.literal(3)]).default(3),
+  bestHoursLabels: z.boolean().default(true),
+  bestHoursLineColor: color.default("#f0b90b"),
+  bestHoursLineWidth: z.number().int().min(1).max(5).default(1),
+  bestHoursLineStyle: z.enum(["solid","dashed","dotted"]).default("dashed"),
+  bestHoursOpacity: z.number().min(0.1).max(1).default(0.85),
 }).strict().superRefine((value,ctx)=>{try{validateGraphics(value.graphics);}catch(e){ctx.addIssue({code:"custom",path:["graphics"],message:String(e)});}if(new Set(value.parameters.map(p=>p.key)).size!==value.parameters.length)ctx.addIssue({code:"custom",path:["parameters"],message:"Duplicate parameter keys"});if(value.kind==="expression"){try{compileExpression(value.expression,parameterValues(value));}catch(e){ctx.addIssue({code:"custom",path:["expression"],message:String(e)});}}});
 
 export type ImportedIndicator = z.infer<typeof indicatorSchema>;

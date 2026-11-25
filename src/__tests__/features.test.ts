@@ -172,7 +172,10 @@ describe("session replay", () => {
     engine.closePosition(engine.getPositions()[0]!.id);
 
     const accountId = (await api.getMyAccounts())[0]!.id;
-    const session = await api.replayGetSession(accountId, today, "BTCUSD");
+    // Replay windows are UTC because candle timestamps are epoch/UTC. A trade
+    // after 21:00 in Brazil already belongs to the next UTC date.
+    const tradeDateUtc = new Date().toISOString().slice(0, 10);
+    const session = await api.replayGetSession(accountId, tradeDateUtc, "BTCUSD");
     expect(session.tradeEvents.length).toBeGreaterThan(0);
     expect(session.tradeEvents[0]).toMatchObject({ type: "exit", symbolName: "BTCUSD" });
   });

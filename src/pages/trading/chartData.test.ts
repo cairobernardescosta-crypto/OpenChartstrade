@@ -21,7 +21,7 @@ describe("buildChartData", () => {
       [
         candle({ time: 2_000, close: 12, volume: 7 }),
         candle({ time: 1_000, close: 9, volume: 3 }),
-        candle({ time: 1_000, close: 8, volume: 4 }),
+        candle({ time: 1_000, low: 7, close: 8, volume: 4 }),
       ],
       colors,
     );
@@ -50,5 +50,14 @@ describe("buildChartData", () => {
       1_700_000_000,
       1_704_067_200,
     ]);
+  });
+
+  it("drops corrupt OHLCV before duplicate reconciliation", () => {
+    const result = buildChartData([
+      candle({ time: 1_000, close: 11 }),
+      candle({ time: 1_000, high: 8, close: 12 }),
+      candle({ time: 2_000, volume: -1 }),
+    ], colors);
+    expect(result.chartData.map((row) => [row.time, row.close])).toEqual([[1_000, 11]]);
   });
 });

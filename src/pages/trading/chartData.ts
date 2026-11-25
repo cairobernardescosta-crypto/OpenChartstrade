@@ -1,30 +1,13 @@
 import { useMemo } from "react";
 import type { CandlestickData, HistogramData, Time } from "lightweight-charts";
 import type { Candle } from "../../services/schemas.ts";
+import { candleTimeSeconds, isValidOhlcv } from "../../lib/market-data/candle-integrity.ts";
 
 type CandleRow = CandlestickData<Time> & { volume: number };
 
-// Treat values below 1e12 as seconds, at/above as milliseconds.
-function secOrMsToMs(value: number): number {
-  return value < 1_000_000_000_000 ? value * 1000 : value;
-}
-
-// Normalize a candle timestamp (seconds, milliseconds, or ISO string) to unix seconds.
-function candleTimeSec(candle: Candle): number {
-  let timestampMs = Number.NaN;
-  if (typeof candle.time === "number" && candle.time > 0) {
-    timestampMs = secOrMsToMs(candle.time);
-  } else if (typeof candle.timestamp === "number" && candle.timestamp > 0) {
-    timestampMs = secOrMsToMs(candle.timestamp);
-  } else if (typeof candle.timestamp === "string") {
-    timestampMs = Date.parse(candle.timestamp);
-  }
-  return Number.isNaN(timestampMs) ? Number.NaN : Math.floor(timestampMs / 1000);
-}
-
 function toCandleRow(candle: Candle): CandleRow {
   return {
-    time: candleTimeSec(candle) as Time,
+    time: candleTimeSeconds(candle) as Time,
     open: Number(candle.open),
     high: Number(candle.high),
     low: Number(candle.low),
@@ -49,6 +32,7 @@ export function buildChartData(
   colors: { volumeUp: string; volumeDown: string },
 ): { chartData: CandlestickData<Time>[]; volumeData: HistogramData<Time>[] } {
   const sorted = candles
+    .filter(isValidOhlcv)
     .map(toCandleRow)
     .filter((candle) => !Number.isNaN(candle.time as number) && (candle.time as number) > 0)
     .sort((a, b) => (a.time as number) - (b.time as number));

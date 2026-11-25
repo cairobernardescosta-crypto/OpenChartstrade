@@ -28,4 +28,12 @@ export default {
   "showLabels": true,
   "category": "HTF",
   "author": "OpenCharts"
+  ,"bestHoursEnabled": true
+  ,"bestHoursPeriod": 7
+  ,"bestHoursCount": 3
+  ,"bestHoursLabels": true
+  ,"bestHoursLineColor": "#f0b90b"
+  ,"bestHoursLineWidth": 1
+  ,"bestHoursLineStyle": "dashed"
+  ,"bestHoursOpacity": 0.85
 };
