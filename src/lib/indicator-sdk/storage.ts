@@ -8,7 +8,7 @@ let library:ImportedIndicator[]=[];
 let history:Record<string,IndicatorRevision[]>=Object.create(null) as Record<string,IndicatorRevision[]>;
 let error="";
 let revision=0;
-function migrateDefinitions(raw:unknown){if(!Array.isArray(raw))return raw;return raw.map(value=>value&&typeof value==="object"&&(value as {id?:unknown}).id==="htf-candle-range"&&!Object.hasOwn(value,"bestHoursEnabled")?{...value,bestHoursEnabled:true}:value);}
+function migrateDefinitions(raw:unknown){if(!Array.isArray(raw))return raw;return raw.map(value=>value&&typeof value==="object"&&(value as {id?:unknown}).id==="htf-candle-range"&&!Object.hasOwn(value,"bestHoursEnabled")?{...value,bestHoursEnabled:false}:value);}
 try{const raw=localStorage.getItem(KEY);if(raw)library=indicatorSchema.array().max(100).parse(migrateDefinitions(JSON.parse(raw)));const h=localStorage.getItem(HISTORY);if(h){const value=JSON.parse(h) as Record<string,unknown>;for(const [id,rows] of Object.entries(value)){if(/^[a-z][a-z0-9-]{0,63}$/.test(id)&&id!=="constructor")history[id]=parseRevisions(rows).filter(x=>x.definition.id===id);}}}catch(e){error=String(e);}
 const listeners=new Set<()=>void>();
 function subscribe(fn:()=>void){listeners.add(fn);return ()=>{listeners.delete(fn);};}
@@ -25,7 +25,7 @@ export function versions(id:string){return revisionEntries(id).map(x=>x.revision
 export function restoreRevisionEntry(id:string,index:number,expected:IndicatorRevision){const row=history[id]?.[index];if(!row||row!==expected||row.definition.id!==id)throw new Error("A revisão mudou. Reabra o histórico.");return updateIndicator(row.definition);}
 export function duplicateIndicator(id:string){const entry=library.find(x=>x.id===id);if(!entry)throw new Error("Indicator not installed");let n=1;let next=id.slice(0,50)+"-copy-"+n;while(library.some(x=>x.id===next)){n++;next=id.slice(0,50)+"-copy-"+n;}installIndicator({...entry,id:next,name:(entry.name+" copy "+n).slice(0,80),favorite:false});}
 export function exportLibrary(){return JSON.stringify({sdk:1,indicators:library,history},null,2);}
-export function restoreLibrary(source:string){assertLibraryReady();assertWritable();const data=validateLibraryBackup(source);history=data.history;persistState(HISTORY,history);save(data.indicators);}
+export async function restoreLibrary(source:string){assertLibraryReady();assertWritable();const data=validateLibraryBackup(source);await persistStates({[HISTORY]:data.history,[KEY]:data.indicators});revision++;history=data.history;library=data.indicators;listeners.forEach(fn=>fn());}
 
 const initialRevision=revision;
 function validRows(raw:unknown){const rows=indicatorSchema.array().max(100).parse(migrateDefinitions(raw));if(new Set(rows.map(x=>x.id)).size!==rows.length)throw new Error("Duplicate indicator IDs");return rows;}

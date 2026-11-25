@@ -8,7 +8,7 @@ import {exportOverrides,validateOverrides,restoreOverrides,assertOverridesReady}
 type Kind="workspace"|"indicators"|"library"|"overrides";
 const labels:Record<Kind,string>={workspace:"Espaço de trabalho",indicators:"Indicadores e configurações",library:"Biblioteca e revisões",overrides:"Configurações dos dois gráficos"};
 type Inspection={kind:Kind;summary:string;confirmation:string};
-export function inspectBackup(source:string):Inspection{
+function inspectBackup(source:string):Inspection{
  if(source.length>MAX_BACKUP_SIZE)throw Error("Backup too large");
  const raw=JSON.parse(source);
  if(raw?.format==="opencharts-indicators"){
@@ -24,7 +24,7 @@ export function IndicatorBackupPanel(){
  const run=async(label:string,fn:()=>Promise<void>|void)=>{if(lock.current)return;lock.current=true;setBusy(label);setError("");setNotice("");try{await fn();}catch(e){setError(String(e));}finally{lock.current=false;setBusy("");}};
  const exportKind=(kind:Kind)=>void run("Preparando backup…",async()=>{assertLibraryReady();assertOverridesReady();const data=kind==="workspace"?await exportWorkspaceBackup():kind==="indicators"?exportIndicatorBackup():kind==="library"?exportLibrary():exportOverrides();download(data,kind);setNotice("Arquivo de backup preparado para download.");});
  const load=(text:string,name:string)=>{setInspection(null);setSource(text);setFilename(name);setInspection(inspectBackup(text));};
- const restore=()=>void run("Restaurando…",async()=>{const checked=inspectBackup(source);if(!window.confirm(checked.confirmation))return;if(checked.kind==="workspace"||checked.kind==="indicators")await restoreIndicatorBackup(source);else if(checked.kind==="library")restoreLibrary(source);else restoreOverrides(source);void queryClient.invalidateQueries();setNotice(checked.kind==="library"||checked.kind==="overrides"?"Restauração aplicada. Consulte o diagnóstico de armazenamento para confirmar a persistência.":"Restauração concluída.");setInspection(null);setSource("");setFilename("");if(fileInput.current)fileInput.current.value="";});
+ const restore=()=>void run("Restaurando…",async()=>{const checked=inspectBackup(source);if(!window.confirm(checked.confirmation))return;if(checked.kind==="workspace"||checked.kind==="indicators")await restoreIndicatorBackup(source);else if(checked.kind==="library")await restoreLibrary(source);else restoreOverrides(source);void queryClient.invalidateQueries();setNotice(checked.kind==="overrides"?"Restauração aplicada. Consulte o diagnóstico de armazenamento para confirmar a persistência.":"Restauração concluída.");setInspection(null);setSource("");setFilename("");if(fileInput.current)fileInput.current.value="";});
  const button="rounded border border-border px-2 py-1.5 disabled:opacity-40";
  return <section aria-label="Central de backups" className="space-y-3 rounded border border-border p-2 text-xs">
  <div><p className="font-semibold">Central de backups</p><p className="text-muted-foreground">Arquivos JSON locais. Não incluem carteira, credenciais ou ordens.</p></div>

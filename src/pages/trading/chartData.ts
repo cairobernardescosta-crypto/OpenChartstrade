@@ -51,6 +51,6 @@ export function buildChartData(
 export function useChartData(candles: Candle[], colors: { volumeUp: string; volumeDown: string }) {
   return useMemo(
     () => buildChartData(candles, colors),
-    [candles, colors.volumeUp, colors.volumeDown],
+    [candles, colors],
   );
 }

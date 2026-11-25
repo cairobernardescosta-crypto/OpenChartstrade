@@ -248,6 +248,8 @@ export function ChartTemplatesMenu(props: ChartTemplatesMenuProps) {
   const prefs = useChartPreferences(indicatorScope);
   const { templates, save, remove } = useChartTemplates();
   const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const [manageMode, setManageMode] = useState(false);
   const activeName=prefs.activeChartTemplate;
   const autosave=prefs.chartTemplateAutosave;
@@ -260,6 +262,19 @@ export function ChartTemplatesMenu(props: ChartTemplatesMenuProps) {
     [saveMutate],
   );
   useTemplateAutosave(autosave, activeName, content, saveFn);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => {
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
 
   const applyTemplate = (t: ChartTemplate) => {
     const c = t.panels[0];
@@ -300,9 +315,12 @@ export function ChartTemplatesMenu(props: ChartTemplatesMenuProps) {
   };
 
   return (
-    <div className="relative hidden md:block">
+    <div ref={rootRef} className="relative">
       <button
+        ref={triggerRef}
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="menu"
         title="Chart layout templates"
         className={cn(
           "flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors",
@@ -317,7 +335,7 @@ export function ChartTemplatesMenu(props: ChartTemplatesMenuProps) {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-50 mt-1 w-60 rounded-lg border border-border bg-card/95 py-1 shadow-2xl backdrop-blur-xl">
+          <div role="menu" aria-label="Templates de gráfico" className="fixed inset-x-2 top-24 z-[90] max-h-[75vh] overflow-y-auto rounded-lg border border-border bg-card/95 py-1 shadow-2xl backdrop-blur-xl md:absolute md:inset-x-auto md:right-0 md:top-full md:z-50 md:mt-1 md:w-60">
             <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Layout templates
             </div>

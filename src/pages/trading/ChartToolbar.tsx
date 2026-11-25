@@ -164,6 +164,8 @@ export function ChartToolbar({
     const saved = safeStorage.getJSON<unknown>("watchlist_favorites", []);
     return new Set(Array.isArray(saved) ? saved.filter((value): value is string => typeof value === "string") : []);
   });
+  const symbolSearchRef = useRef<HTMLDivElement>(null);
+  const symbolTriggerRef = useRef<HTMLButtonElement>(null);
   const network = useHlSession((s) => s.network);
 
   const openSymbolSearch = () => {
@@ -171,6 +173,27 @@ export function ChartToolbar({
     setFavoriteSymbols(new Set(Array.isArray(saved) ? saved.filter((value): value is string => typeof value === "string") : []));
     setShowSymbolSearch((visible) => !visible);
   };
+
+  useEffect(() => {
+    if (!showSymbolSearch) return;
+    const close = () => {
+      setShowSymbolSearch(false);
+      setSymbolFilter("");
+      symbolTriggerRef.current?.focus();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      if (!symbolSearchRef.current?.contains(event.target as Node)) close();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [showSymbolSearch]);
 
   const normalizedSymbolFilter = symbolFilter.trim().toLowerCase();
   const filteredSymbols = symbols.filter(
@@ -203,9 +226,12 @@ export function ChartToolbar({
       )}
 
       {/* Symbol Selector — TradingView style */}
-      <div className="relative shrink-0">
+      <div ref={symbolSearchRef} className="relative shrink-0">
         <button
+          ref={symbolTriggerRef}
           onClick={openSymbolSearch}
+          aria-expanded={showSymbolSearch}
+          aria-haspopup="dialog"
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-secondary font-bold text-sm tracking-tight"
         >
           {selectedSymbol}
@@ -217,6 +243,9 @@ export function ChartToolbar({
             {/* Mobile: full-screen modal (avoids parent overflow clipping) */}
             <div
               className="md:hidden fixed inset-0 z-[100] bg-black/60"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Pesquisar símbolos"
               onClick={() => setShowSymbolSearch(false)}
             >
               <div
@@ -233,6 +262,8 @@ export function ChartToolbar({
                     className="flex-1 bg-transparent text-base outline-none"
                   />
                   <button
+                    type="button"
+                    aria-label="Fechar pesquisa de símbolos"
                     onClick={() => {
                       setShowSymbolSearch(false);
                       setSymbolFilter("");
@@ -458,7 +489,7 @@ export function ChartToolbar({
 
       {/* Indicators */}
       {
-        <div className="relative hidden md:block">
+        <div className="relative">
           <button
             onClick={onToggleIndicatorMenu}
             className={cn(
@@ -478,7 +509,7 @@ export function ChartToolbar({
           </button>
 
           {showIndicatorMenu && (
-            <div className="absolute top-full left-0 z-50 mt-1 w-80 max-h-[75vh] overflow-y-auto bg-card border border-border rounded-lg shadow-xl p-2 space-y-0.5">
+            <div className="fixed inset-x-2 top-24 z-[90] max-h-[75vh] overflow-y-auto bg-card border border-border rounded-lg shadow-xl p-2 space-y-0.5 md:absolute md:inset-x-auto md:top-full md:left-0 md:z-50 md:mt-1 md:w-80">
               <IndicatorLibraryMenu key={indicatorScope} scope={indicatorScope} active={activeIndicators} toggle={(id)=>{onToggleIndicator(id);void playSound("toggle","indicators");}} symbol={selectedSymbol} timeframe={timeframe} replay={isReplaying} previewCandles={previewCandles} />
               {INDICATOR_REGISTRY.map((ind) => (
                 <button

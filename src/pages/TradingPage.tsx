@@ -43,6 +43,7 @@ interface LayoutState {
   rightPanel?: "order" | "dom" | "watchlist" | "news" | "tv-analysis";
   showRightPanel?: boolean;
   chartsLinked?: boolean;
+  linkedSource?: "primary" | "secondary";
 }
 function readSecondaryState(): SecondaryChartState {
   const memory = getWorkspaceMemorySettings();
@@ -147,7 +148,9 @@ export function TradingPage() {
   const [chartLayout, setChartLayout] = useState<"single" | "split">(initialLayout.chartLayout === "split" ? "split" : "single");
   const [activeChart, setActiveChart] = useState<"primary" | "secondary">(initialLayout.activeChart === "secondary" ? "secondary" : "primary");
   const [chartsLinked, setChartsLinked] = useState(initialLayout.chartsLinked === true);
-  const [linkedSource, setLinkedSource] = useState<"primary" | "secondary">("primary");
+  const [linkedSource, setLinkedSource] = useState<"primary" | "secondary">(
+    initialLayout.linkedSource === "secondary" ? "secondary" : "primary",
+  );
   const secondaryPrefs=useChartPreferences("secondary");
   const focusedPrefs=activeChart==="primary"?chartPrefs:secondaryPrefs;
   // The secondary chart owns its market and indicator state. It starts on 1h
@@ -172,7 +175,9 @@ export function TradingPage() {
   useEffect(() => {
     if (hadStoredSecondaryRef.current || symbols.length === 0 || symbols.some((symbol) => symbol.name === secondarySymbol)) return;
     const fallback = symbols.find((symbol) => symbol.name === selectedSymbol)?.name ?? symbols[0]?.name;
-    if (fallback) setSecondarySymbol(fallback);
+    if (!fallback) return;
+    const timer = window.setTimeout(() => setSecondarySymbol(fallback), 0);
+    return () => window.clearTimeout(timer);
   }, [secondarySymbol, selectedSymbol, symbols]);
 
   useEffect(() => {
@@ -219,8 +224,8 @@ export function TradingPage() {
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
 
   useEffect(() => {
-    if (getWorkspaceMemorySettings().layout) safeStorage.setJSON(LAYOUT_STATE_KEY, { chartLayout, activeChart, bottomTab, rightPanel, showRightPanel, chartsLinked } satisfies LayoutState);
-  }, [chartLayout, activeChart, bottomTab, rightPanel, showRightPanel, chartsLinked]);
+    if (getWorkspaceMemorySettings().layout) safeStorage.setJSON(LAYOUT_STATE_KEY, { chartLayout, activeChart, bottomTab, rightPanel, showRightPanel, chartsLinked, linkedSource } satisfies LayoutState);
+  }, [chartLayout, activeChart, bottomTab, rightPanel, showRightPanel, chartsLinked, linkedSource]);
 
   // ── Vertical resize: chart vs bottom panel ──
   const [bottomPanelHeight, setBottomPanelHeight] = useState(() => {
@@ -239,7 +244,7 @@ export function TradingPage() {
       setShowRightPanel(true);
       rightPanelHover.onPointerEnter();
     },
-    [rightPanelHover.onPointerEnter],
+    [rightPanelHover],
   );
   const handleRightPanelVisibilityToggle = useCallback(() => {
     if (showRightPanel) {
@@ -249,7 +254,7 @@ export function TradingPage() {
     }
     setShowRightPanel(true);
     rightPanelHover.onPointerEnter();
-  }, [showRightPanel, rightPanelHover.onPointerEnter, rightPanelHover.onPointerLeave]);
+  }, [showRightPanel, rightPanelHover]);
   const resizeStartY = useRef(0);
   const resizeStartH = useRef(0);
 
@@ -287,7 +292,7 @@ export function TradingPage() {
       window.addEventListener("touchmove", onMove, { passive: false });
       window.addEventListener("touchend", onUp);
     },
-    [bottomPanelHeight, bottomPanelHover.onPointerLeave],
+    [bottomPanelHeight, bottomPanelHover],
   );
 
   // Loading a chart template swaps the whole indicator list; the toolbar's
@@ -402,7 +407,15 @@ export function TradingPage() {
         onSetIndicators={setTemplateIndicators}
         onSetPlugins={setTemplatePlugins}
         magnetMode={focusedPrefs.magnetMode}
-        onCycleMagnet={cycleMagnetMode}
+        onCycleMagnet={() => {
+          if (activeChart === "primary") {
+            cycleMagnetMode();
+            return;
+          }
+          const order = ["none", "weak", "strong"] as const;
+          const next = order[(order.indexOf(secondaryPrefs.magnetMode) + 1) % order.length] ?? "none";
+          updateChartPreferences({ magnetMode: next }, "secondary");
+        }}
         stayInDrawingMode={focusedPrefs.stayInDrawingMode}
         onToggleStayInDrawingMode={() =>
           updateChartPreferences({ stayInDrawingMode: !focusedPrefs.stayInDrawingMode },activeChart)
@@ -416,7 +429,7 @@ export function TradingPage() {
         {/* Chart + Bottom Panel */}
         <div className="relative flex flex-col flex-1 min-w-0">
           {/* Chart Area. Split mode initially mirrors the primary chart configuration. */}
-          <div className={`flex-1 min-h-[200px] relative ${chartLayout === "split" ? "grid grid-cols-2 gap-px bg-border" : ""}`}>
+          <div className={`flex-1 min-h-[200px] relative ${chartLayout === "split" ? "grid grid-cols-1 grid-rows-2 md:grid-cols-2 md:grid-rows-1 gap-px bg-border" : ""}`}>
             <div className={`min-w-0 min-h-0 h-full relative overflow-hidden ${activeChart === "primary" && chartLayout === "split" ? "ring-1 ring-inset ring-primary/50" : ""}`} onPointerDownCapture={() => setActiveChart("primary")}>
             <ChartPanel
               candles={replayCandles ?? candles ?? []}
