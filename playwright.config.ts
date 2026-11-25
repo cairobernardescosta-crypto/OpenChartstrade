@@ -12,7 +12,9 @@ export default defineConfig({
   testMatch: /.*\.spec\.ts/,
   timeout: 60_000,
   expect: { timeout: 10_000 },
-  fullyParallel: true,
+  // Tests in the same file share scenarios around approval/onboarding state;
+  // keep their order deterministic while still running different files in parallel.
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 2 : 3,
@@ -26,7 +28,9 @@ export default defineConfig({
   webServer: {
     command: `npx vite --host 127.0.0.1 --port ${PORT} --strictPort`,
     url: `http://127.0.0.1:${PORT}`,
-    reuseExistingServer: !process.env.CI,
+    // Always exercise the current checkout. Reusing an arbitrary process on
+    // this port can make a local run validate a different application/build.
+    reuseExistingServer: false,
     timeout: 120_000,
     env: {
       VITE_ADAPTER: "hyperliquid",

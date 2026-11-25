@@ -15,7 +15,9 @@ New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
 function Test-OpenChartsReady {
   try {
     $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2
-    return $response.StatusCode -ge 200 -and $response.StatusCode -lt 500
+    return $response.StatusCode -ge 200 `
+      -and $response.StatusCode -lt 400 `
+      -and $response.Content -match '<title>OpenCharts[^<]*Open-Source Trading Terminal</title>'
   } catch {
     return $false
   }

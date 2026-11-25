@@ -41,8 +41,13 @@ async function guardNetwork(page: Page, forbidden: string[]): Promise<void> {
     forbidden.push(url);
     return route.abort();
   });
-  await page.routeWebSocket(/^wss:\/\/api\.hyperliquid\.xyz\//, (ws) => {
-    forbidden.push(ws.url());
+  await page.routeWebSocket(/.*/, (ws) => {
+    const url = ws.url();
+    if (/^wss?:\/\/(127\.0\.0\.1|localhost)(:\d+)?\//.test(url)) {
+      ws.connectToServer();
+      return;
+    }
+    forbidden.push(url);
     void ws.close();
   });
 }
