@@ -688,6 +688,9 @@ export function createHyperliquidTrading(opts: HyperliquidTradingOptions): Hyper
     /** Monotonic clock ordering REST snapshots and websocket pushes; stale results are dropped. */
     clock: number;
     applied: number;
+    /** Monotonic clock for REST order snapshots and websocket order pushes. */
+    orderClock: number;
+    orderApplied: number;
     collateral: UnifiedCollateral | null;
   }
   let live: Live | null = null;
@@ -797,6 +800,7 @@ export function createHyperliquidTrading(opts: HyperliquidTradingOptions): Hyper
 
   function onOrderUpdates(l: Live, events: OrderUpdatesWsEvent): void {
     if (l.dead) return;
+    l.orderApplied = ++l.orderClock;
     let touchedTrigger = false;
     for (const u of events) {
       const type = orderEventType(u.status);
@@ -816,9 +820,10 @@ export function createHyperliquidTrading(opts: HyperliquidTradingOptions): Hyper
 
   /** Reconcile the open-order set by REST: covers reconnect gaps and the polling fallback. */
   async function pollOrders(l: Live, silent = false): Promise<void> {
+    const token = ++l.orderClock;
     try {
       const orders = await getReader().openOrders(l.address);
-      if (l.dead) return;
+      if (l.dead || token < l.orderClock) return;
       const nextIds = new Set(orders.map((o) => o.oid));
       if (!silent) {
         for (const o of orders) if (!l.openOids.has(o.oid)) emitOrder(l, "order.placed", o, "PENDING");
@@ -834,6 +839,8 @@ export function createHyperliquidTrading(opts: HyperliquidTradingOptions): Hyper
           emitOrder(l, type, old, type === "order.filled" ? "FILLED" : type === "order.rejected" ? "REJECTED" : "CANCELED");
         }
       }
+      if (l.dead || token < l.orderClock) return;
+      l.orderApplied = token;
       l.openOids = new Map(orders.map((o) => [o.oid, o]));
       l.ordersCache = orders;
     } catch {
@@ -868,7 +875,7 @@ export function createHyperliquidTrading(opts: HyperliquidTradingOptions): Hyper
     const l: Live = {
       key, address, network, streams: null, handles: [], offReconnect: null, timer: null, debounce: null,
       positions: new Map(), account: "", ordersCache: [], mids: new Map(), openOids: new Map(),
-      seenStatus: new Set(), dead: false, clock: 0, applied: 0, collateral: null,
+      seenStatus: new Set(), dead: false, clock: 0, applied: 0, orderClock: 0, orderApplied: 0, collateral: null,
     };
     live = l;
     await syncState(l, true); // seed baselines without emitting
@@ -881,19 +888,31 @@ export function createHyperliquidTrading(opts: HyperliquidTradingOptions): Hyper
         void syncState(l);
         void pollOrders(l);
       });
-      l.handles = await Promise.all([
-        streams.orderUpdates(address, (e) => onOrderUpdates(l, e)),
-        streams.userFills(address, (e) => {
+      const track = (handle: StreamHandle): boolean => {
+        if (!l.dead) {
+          l.handles.push(handle);
+          return true;
+        }
+        void handle.unsubscribe().catch(() => undefined);
+        return false;
+      };
+      if (!track(await streams.orderUpdates(address, (e) => onOrderUpdates(l, e)))) return;
+      if (!track(await streams.userFills(address, (e) => {
           if (!l.dead && e.isSnapshot !== true) scheduleSync(l);
-        }),
-        streams.allDexsClearinghouseState(address, (e) => {
+        }))) return;
+      if (!track(await streams.allDexsClearinghouseState(address, (e) => {
           if (l.dead) return;
           l.applied = ++l.clock; // supersedes any REST snapshot still in flight
           applyStates(l, e.clearinghouseStates.map(([dex, state]) => ({ dex, state })), false);
-        }),
-      ]);
+        }))) return;
       if (l.dead) for (const h of l.handles) void h.unsubscribe().catch(() => undefined);
     } catch {
+      l.offReconnect?.();
+      l.offReconnect = null;
+      for (const h of l.handles) void h.unsubscribe().catch(() => undefined);
+      l.handles = [];
+      l.streams?.close();
+      l.streams = null;
       startPolling(l); // websocket unavailable: degrade to REST polling
     }
   }

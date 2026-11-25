@@ -79,6 +79,14 @@ function makeSource(opts: Parameters<typeof createApi>[0] = {}, now: () => numbe
   return { md, api };
 }
 
+describe("market schedules", () => {
+  it("reports core crypto as continuous but leaves HIP-3 calendars unknown", async () => {
+    const { md } = makeSource();
+    await expect(md.getMarketSchedule?.("BTC", Date.now())).resolves.toMatchObject({ continuous: true, days: [0, 1, 2, 3, 4, 5, 6] });
+    await expect(md.getMarketSchedule?.("xyz:EUR", Date.now())).resolves.toBeNull();
+  });
+});
+
 beforeEach(() => FakeWebSocket.reset());
 
 describe("getSymbols", () => {

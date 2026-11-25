@@ -421,7 +421,24 @@ export function createHyperliquidMarketData(
     },
 
     getCandles,
-    async getMarketSchedule(symbol:string,_atMs:number){await ensureRegistry();if(!registry.bySymbol(symbol))return null;return {timezone:"UTC",open:"00:00",close:"00:00",days:[0,1,2,3,4,5,6],source:"Hyperliquid trading convention (24/7; excludes underlying oracle calendar)",continuous:true};},
+    async getMarketSchedule(symbol: string, _atMs: number) {
+      await ensureRegistry();
+      const market = registry.bySymbol(symbol);
+      if (!market) return null;
+      // Core crypto perps are continuous. HIP-3 products may follow an external
+      // oracle/underlying calendar that Hyperliquid does not publish here, so
+      // returning null preserves the user's manual schedule instead of
+      // incorrectly treating GOLD, stocks or FX as 24/7.
+      if (market.dex || market.category !== "Crypto") return null;
+      return {
+        timezone: "UTC",
+        open: "00:00",
+        close: "00:00",
+        days: [0, 1, 2, 3, 4, 5, 6],
+        source: "Hyperliquid core crypto perpetuals (24/7)",
+        continuous: true,
+      };
+    },
 
     async getQuote(symbol: string): Promise<Quote | null> {
       await ensureRegistry();

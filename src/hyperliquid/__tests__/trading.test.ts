@@ -813,6 +813,17 @@ describe("subscribe", () => {
     t.dispose();
   });
 
+  it("cleans up subscriptions created before a later websocket subscription fails", async () => {
+    const { streams, raw, unsubscribe } = fakeStreams();
+    raw.userFills.mockRejectedValueOnce(new Error("subscription failed"));
+    const t = makeEnv().make({ streamsFactory: () => streams, pollIntervalMs: 1000 });
+    t.subscribe(() => undefined);
+    await vi.waitFor(() => expect(raw.userFills).toHaveBeenCalled());
+    await vi.waitFor(() => expect(unsubscribe).toHaveBeenCalledTimes(1));
+    expect(raw.close).toHaveBeenCalledTimes(1);
+    t.dispose();
+  });
+
   it("does not stream until a wallet is connected, then starts when one is", async () => {
     setSession({ address: null, agent: null, status: "disconnected" });
     const { streams, raw } = fakeStreams();
