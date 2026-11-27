@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { IndicatorLibraryMenu } from "./indicators/IndicatorLibraryMenu";
+import type { OverrideScope } from "../../lib/indicator-sdk/instances";
 import { INDICATOR_REGISTRY, type IndicatorType } from "../../lib/indicators.ts";
 import { cn, formatNumber } from "../../lib/utils.ts";
 import { safeStorage } from "../../lib/safe-storage.ts";
@@ -81,6 +82,7 @@ export interface ChartToolbarProps {
   onChartsLinkedChange?: (linked: boolean) => void;
   activeIndicators: IndicatorType[];
   indicatorScope?: "primary" | "secondary";
+  indicatorOverrideScope?: OverrideScope;
   onToggleIndicator: (type: IndicatorType) => void;
   showIndicatorMenu: boolean;
   onToggleIndicatorMenu: () => void;
@@ -132,6 +134,7 @@ export function ChartToolbar({
   onChartsLinkedChange,
   activeIndicators,
   indicatorScope = "primary",
+  indicatorOverrideScope,
   onToggleIndicator,
   showIndicatorMenu,
   onToggleIndicatorMenu,
@@ -510,7 +513,7 @@ export function ChartToolbar({
 
           {showIndicatorMenu && (
             <div className="fixed inset-x-2 top-24 z-[90] max-h-[75vh] overflow-y-auto bg-card border border-border rounded-lg shadow-xl p-2 space-y-0.5 md:absolute md:inset-x-auto md:top-full md:left-0 md:z-50 md:mt-1 md:w-80">
-              <IndicatorLibraryMenu key={indicatorScope} scope={indicatorScope} active={activeIndicators} toggle={(id)=>{onToggleIndicator(id);void playSound("toggle","indicators");}} symbol={selectedSymbol} timeframe={timeframe} replay={isReplaying} previewCandles={previewCandles} />
+              <IndicatorLibraryMenu key={indicatorScope+":"+(indicatorOverrideScope??indicatorScope)} scope={indicatorScope} overrideScope={indicatorOverrideScope} active={activeIndicators} toggle={(id)=>{onToggleIndicator(id);void playSound("toggle","indicators");}} symbol={selectedSymbol} timeframe={timeframe} replay={isReplaying} previewCandles={previewCandles} />
               {INDICATOR_REGISTRY.map((ind) => (
                 <button
                   key={ind.type}
