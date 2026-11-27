@@ -385,9 +385,10 @@ export function TradingPage() {
         onChartsLinkedChange={(linked) => {
           if (linked) {
             setLinkedSource(activeChart);
-            syncLinkedOverrides(activeChart);
+            void syncLinkedOverrides(activeChart).then(() => setChartsLinked(true)).catch(() => setChartsLinked(false));
+            return;
           }
-          setChartsLinked(linked);
+          setChartsLinked(false);
         }}
         indicatorScope={activeChart}
         indicatorOverrideScope={chartsLinked ? "linked" : activeChart}
