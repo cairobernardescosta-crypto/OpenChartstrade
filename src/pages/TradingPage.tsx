@@ -152,6 +152,7 @@ export function TradingPage() {
   const [linkedSource, setLinkedSource] = useState<"primary" | "secondary">(
     initialLayout.linkedSource === "secondary" ? "secondary" : "primary",
   );
+  const linkingRequestRef = useRef(0);
   const secondaryPrefs=useChartPreferences("secondary");
   const focusedPrefs=activeChart==="primary"?chartPrefs:secondaryPrefs;
   // The secondary chart owns its market and indicator state. It starts on 1h
@@ -383,9 +384,14 @@ export function TradingPage() {
         }}
         chartsLinked={chartsLinked}
         onChartsLinkedChange={(linked) => {
+          const request = ++linkingRequestRef.current;
           if (linked) {
             setLinkedSource(activeChart);
-            void syncLinkedOverrides(activeChart).then(() => setChartsLinked(true)).catch(() => setChartsLinked(false));
+            void syncLinkedOverrides(activeChart).then(() => {
+              if (linkingRequestRef.current === request) setChartsLinked(true);
+            }).catch(() => {
+              if (linkingRequestRef.current === request) setChartsLinked(false);
+            });
             return;
           }
           setChartsLinked(false);
