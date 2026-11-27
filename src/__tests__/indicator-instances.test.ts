@@ -1,5 +1,5 @@
 import {describe,it,expect} from "vitest";
-import {resolveIndicator,linkedOverridesFrom,validateOverrides} from "../lib/indicator-sdk/instances";
+import {resolveIndicator,linkedOverridesFrom,independentOverridesFromLinked,validateOverrides} from "../lib/indicator-sdk/instances";
 import {parseIndicator,HTF_EXAMPLE} from "../lib/indicator-sdk/schema";
 describe("chart overrides",()=>{
  const original=parseIndicator("export default "+HTF_EXAMPLE);
@@ -7,4 +7,7 @@ describe("chart overrides",()=>{
  it("ignores incompatible versions",()=>expect(resolveIndicator(original,[{...original,version:"0.0.1",open:"12:00"}])).toEqual(original));
  it("copies the selected chart settings into an isolated linked snapshot",()=>{const primary=[{...original,open:"12:00"}];const linked=linkedOverridesFrom("primary",{primary,secondary:[],linked:[]});expect(linked).toEqual(primary);expect(linked[0]).not.toBe(primary[0]);expect(linked[0]!.parameters).not.toBe(primary[0]!.parameters);});
  it("migrates persisted settings without a linked scope",()=>{expect(validateOverrides({primary:[],secondary:[]})).toEqual({primary:[],secondary:[],linked:[]});});
+ it("switches the linked source and preserves visual, HTF and best-hours settings",()=>{const primary={...original,color:"#112233",lineWidth:3,sessionMinutes:"60",bestHoursEnabled:true,bestHoursPeriod:7,bestHoursCount:4};const secondary={...original,color:"#aabbcc",lineWidth:2,sessionMinutes:"120",bestHoursEnabled:true,bestHoursPeriod:30,bestHoursCount:5};const scopes={primary:[primary],secondary:[secondary],linked:[]};expect(linkedOverridesFrom("primary",scopes)[0]).toMatchObject({color:"#112233",sessionMinutes:"60",bestHoursPeriod:7,bestHoursCount:4});expect(linkedOverridesFrom("secondary",scopes)[0]).toMatchObject({color:"#aabbcc",sessionMinutes:"120",bestHoursPeriod:30,bestHoursCount:5});});
+ it("seeds both independent charts from the effective linked snapshot",()=>{const linked={...original,color:"#123456",sessionMinutes:"120",bestHoursEnabled:true,bestHoursPeriod:15,bestHoursCount:4};const result=independentOverridesFromLinked({primary:[],secondary:[],linked:[linked]});expect(result.primary[0]).toMatchObject({color:"#123456",sessionMinutes:"120",bestHoursPeriod:15,bestHoursCount:4});expect(result.secondary[0]).toEqual(result.primary[0]);expect(result.primary[0]).not.toBe(result.secondary[0]);expect(result.primary[0]!.parameters).not.toBe(result.secondary[0]!.parameters);});
+
 });
