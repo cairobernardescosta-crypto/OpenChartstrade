@@ -3,7 +3,7 @@ import {persistState,hydrateState,assertWritable} from "./database";
 import {indicatorSchema,type ImportedIndicator} from "./schema";
 export type ChartScope="primary"|"secondary";
 export type OverrideScope=ChartScope|"linked";
-type Overrides=Record<OverrideScope,ImportedIndicator[]>;
+export type Overrides=Record<OverrideScope,ImportedIndicator[]>;
 const KEY="opencharts.indicator-overrides.v1";
 let state:Overrides={primary:[],secondary:[],linked:[]};
 let revision=0;
