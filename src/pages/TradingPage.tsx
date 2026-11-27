@@ -16,6 +16,7 @@ import { ChartPanel } from "./trading/ChartPanel.tsx";
 import { ChartToolbar } from "./trading/ChartToolbar.tsx";
 import { REPLAY_ENABLED, type DrawingTool, type Timeframe } from "./trading/constants.ts";
 import { getPipDigits } from "./trading/utils.ts";
+import { syncLinkedOverrides } from "../lib/indicator-sdk/instances";
 
  // Optional panels are split into separate chunks and fetched only when opened.
 const DOMPanel = lazy(() => import("./trading/DOMPanel.tsx").then((m) => ({ default: m.DOMPanel })));
@@ -382,10 +383,14 @@ export function TradingPage() {
         }}
         chartsLinked={chartsLinked}
         onChartsLinkedChange={(linked) => {
-          if (linked) setLinkedSource(activeChart);
+          if (linked) {
+            setLinkedSource(activeChart);
+            syncLinkedOverrides(activeChart);
+          }
           setChartsLinked(linked);
         }}
         indicatorScope={activeChart}
+        indicatorOverrideScope={chartsLinked ? "linked" : activeChart}
         activeIndicators={chartsLinked ? linkedIndicators : activeChart === "primary" ? activeIndicators : secondaryIndicators}
         onToggleIndicator={chartsLinked ? linkedToggleIndicator : activeChart === "primary" ? toggleIndicator : toggleSecondaryIndicator}
         showIndicatorMenu={showIndicatorMenu}
@@ -437,6 +442,7 @@ export function TradingPage() {
               timeframe={replayCandles ? "1m" : timeframe}
               isDark={isDark}
               activeIndicators={chartsLinked ? linkedIndicators : activeIndicators}
+              indicatorOverrideScope={chartsLinked ? "linked" : "primary"}
               drawingTool={chartsLinked ? linkedDrawingTool : drawingTool}
               drawings={chartsLinked ? linkedDrawings : drawings}
               onAddDrawing={chartsLinked ? linkedAddDrawing : addDrawing}
@@ -476,6 +482,7 @@ export function TradingPage() {
                     timeframe={secondaryTimeframe}
                     isDark={isDark}
                     indicatorScope="secondary"
+                    indicatorOverrideScope={chartsLinked ? "linked" : "secondary"}
                     activeIndicators={chartsLinked ? linkedIndicators : secondaryIndicators}
                     drawingTool={chartsLinked ? linkedDrawingTool : secondaryDrawingTool}
                     drawings={chartsLinked ? linkedDrawings : secondaryDrawings}
