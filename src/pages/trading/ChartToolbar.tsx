@@ -479,8 +479,9 @@ export function ChartToolbar({
       {/* Chart layout templates (save/load/autosave) */}
       {onSetIndicators && onSetPlugins && (
         <ChartTemplatesMenu
-          key={indicatorScope}
+          key={indicatorScope + ":" + (indicatorOverrideScope ?? indicatorScope)}
           indicatorScope={indicatorScope}
+          indicatorOverrideScope={indicatorOverrideScope ?? indicatorScope}
           activeIndicators={activeIndicators}
           onSetIndicators={onSetIndicators}
           activePlugins={activePlugins}
