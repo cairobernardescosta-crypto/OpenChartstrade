@@ -35,6 +35,7 @@ function cloneOverrides(rows:readonly ImportedIndicator[]):ImportedIndicator[]{r
 /** Copies the selected chart settings into the isolated linked scope. The original chart scopes are never modified. */
 export function linkedOverridesFrom(source:ChartScope,overrides:Overrides=state):ImportedIndicator[]{return cloneOverrides(overrides[source]);}
 export async function syncLinkedOverrides(source:ChartScope){await hydration;commit({...state,linked:linkedOverridesFrom(source)});}
+export async function ensureLinkedOverrides(source:ChartScope){await hydration;if(state.linked.length===0&&state[source].length>0)commit({...state,linked:linkedOverridesFrom(source)});}
 export function independentOverridesFromLinked(overrides:Overrides=state){return {primary:cloneOverrides(overrides.linked),secondary:cloneOverrides(overrides.linked)};}
 /** Preserve the effective linked settings in both independent scopes before unlinking. */
 export async function detachLinkedOverrides(){await hydration;commit({...state,...independentOverridesFromLinked()});}
