@@ -14,7 +14,7 @@ import {
   type IndicatorType,
 } from "../../lib/indicators.ts";
 import { toIndicatorCandles } from "./utils.ts";
-import { useOverrides, resolveIndicator, type ChartScope } from "../../lib/indicator-sdk/instances";
+import { useOverrides, resolveIndicator, type ChartScope, type OverrideScope } from "../../lib/indicator-sdk/instances";
 import {useIndicatorAdmin} from "../../lib/indicator-sdk/admin";
 import {publishHistory,retainHistoryStatuses,historyPhase} from "../../lib/indicator-sdk/history-status";
 import {reportIndicator} from "../../lib/indicator-sdk/diagnostics";
@@ -55,6 +55,7 @@ export function useIndicators(
   symbol="",
   paneRoot?:React.RefObject<HTMLDivElement|null>,
   visualColors?:PaneColors,
+  overrideScope:OverrideScope=scope,
 ): void {
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<"Line"> | ISeriesApi<"Histogram"> | ISeriesApi<"Area">>>(
     new Map(),
@@ -72,7 +73,7 @@ export function useIndicators(
   const independentHistory=useMemo(()=>new IndependentHistoryCache((symbol,timeframe,limit,toMs)=>adapter?adapter.marketData.getCandles({symbol,timeframe,limit,toMs}):Promise.reject(Error("Provedor indisponível"))),[adapter]);
   const library = useIndicatorLibrary();
   const admin = useIndicatorAdmin();
-  const overrides = useOverrides(scope);
+  const overrides = useOverrides(overrideScope);
   const colors = visualColors??(isDark ? CHART_COLORS.dark : CHART_COLORS.light);
   const trendColors = isDark ? CHART_COLORS.dark : CHART_COLORS.light;
   const [history,setHistory]=useState<{key:string;rows:Record<string,CandleData[]>;errors?:Record<string,string>}>({key:"",rows:{}});
