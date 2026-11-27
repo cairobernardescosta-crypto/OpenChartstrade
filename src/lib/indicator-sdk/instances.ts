@@ -31,6 +31,9 @@ void hydration.finally(()=>{ready=true;state={...state};listeners.forEach(fn=>fn
 
 export function applyRestoredOverrides(data:ReturnType<typeof validateOverrides>){revision++;state=data;listeners.forEach(fn=>fn());}
 
+function cloneOverrides(rows:readonly ImportedIndicator[]):ImportedIndicator[]{return rows.map(entry=>({...entry,parameters:entry.parameters.map(parameter=>({...parameter})),graphics:entry.graphics.map(graphic=>({...graphic}))}));}
 /** Copies the selected chart settings into the isolated linked scope. The original chart scopes are never modified. */
-export function linkedOverridesFrom(source:ChartScope,overrides:Overrides=state):ImportedIndicator[]{return overrides[source].map(entry=>({...entry,parameters:entry.parameters.map(parameter=>({...parameter})),graphics:entry.graphics.map(graphic=>({...graphic}))}));}
+export function linkedOverridesFrom(source:ChartScope,overrides:Overrides=state):ImportedIndicator[]{return cloneOverrides(overrides[source]);}
 export async function syncLinkedOverrides(source:ChartScope){await hydration;commit({...state,linked:linkedOverridesFrom(source)});}
+/** Preserve the effective linked settings in both independent scopes before unlinking. */
+export async function detachLinkedOverrides(){await hydration;const shared=state.linked;commit({...state,primary:cloneOverrides(shared),secondary:cloneOverrides(shared)});}
