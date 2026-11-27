@@ -9,7 +9,7 @@ import {
 } from "../../hooks/useChartPreferences.ts";
 import { INDICATOR_REGISTRY, type IndicatorType } from "../../lib/indicators.ts";
 import {useIndicatorLibrary,installMissingDefinitions,assertLibraryReady} from "../../lib/indicator-sdk/storage";
-import {useOverrides,replaceChartOverrides,assertOverridesReady,type ChartScope} from "../../lib/indicator-sdk/instances";
+import {useOverrides,replaceChartOverrides,assertOverridesReady,type ChartScope,type OverrideScope} from "../../lib/indicator-sdk/instances";
 import {buildTemplateSnapshot,prepareTemplateSnapshot} from "../../lib/indicator-sdk/template-snapshot";
 import { cn } from "../../lib/utils.ts";
 import {
@@ -30,6 +30,7 @@ const AUTOSAVE_DEBOUNCE_MS = 1_500;
 export interface ChartTemplatesMenuProps {
   activeIndicators: IndicatorType[];
   indicatorScope?:ChartScope;
+  indicatorOverrideScope?:OverrideScope;
   onSetIndicators: (indicators: IndicatorType[]) => void;
   activePlugins: string[];
   onSetPlugins: (ids: string[]) => void;
@@ -242,9 +243,9 @@ function TemplateList({
 }
 
 export function ChartTemplatesMenu(props: ChartTemplatesMenuProps) {
-  const { activeIndicators, onSetIndicators, activePlugins, onSetPlugins, indicatorScope="primary" } = props;
+  const { activeIndicators, onSetIndicators, activePlugins, onSetPlugins, indicatorScope="primary", indicatorOverrideScope=indicatorScope } = props;
   const library=useIndicatorLibrary();
-  const overrides=useOverrides(indicatorScope);
+  const overrides=useOverrides(indicatorOverrideScope);
   const prefs = useChartPreferences(indicatorScope);
   const { templates, save, remove } = useChartTemplates();
   const [open, setOpen] = useState(false);
@@ -285,6 +286,7 @@ export function ChartTemplatesMenu(props: ChartTemplatesMenuProps) {
       installMissingDefinitions(prepared.missing);
       replaceChartOverrides("primary",prepared.overrides);
       replaceChartOverrides("secondary",prepared.overrides);
+      if(indicatorOverrideScope==="linked")replaceChartOverrides("linked",prepared.overrides);
       const available=new Set(prepared.available.map(x=>"custom:"+x.id));
       const ids=(c.indicators??[]).filter(id=>typeof id==="string"&&(available.has(id)||INDICATOR_REGISTRY.some(x=>x.type===id))) as IndicatorType[];
       const patch=contentToPrefsPatch(c);
