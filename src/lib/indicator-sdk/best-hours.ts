@@ -37,3 +37,27 @@ export function analyzeBestHours(candles:readonly CandleData[],config:ImportedIn
  const ranking=hours.filter(row=>row.observations>=minimum).sort((a,b)=>b.mean-a.mean||b.observedDays-a.observedDays||a.hour-b.hour).slice(0,3);
  return {period,timezone:config.timezone,minimumObservations:minimum,hours,ranking,insufficient:ranking.length===0};
 }
+
+
+export interface BestHoursSnapshot {analysis:BestHoursAnalysis;rows:CandleData[];}
+const sharedBestHours=new Map<string,{expiresAt:number;promise:Promise<BestHoursSnapshot>}>();
+/** Deduplicates identical linked-chart fetches and analysis while keeping the cache bounded. */
+export function loadBestHoursSnapshot(
+ key:string,
+ load:()=>Promise<readonly CandleData[]>,
+ config:ImportedIndicator,
+ period:BestHoursPeriod,
+ cutoff:number,
+):Promise<BestHoursSnapshot>{
+ const now=Date.now(),cached=sharedBestHours.get(key);
+ if(cached&&cached.expiresAt>now)return cached.promise;
+ const promise=load().then(source=>{
+  const rows=[...source];
+  return {analysis:analyzeBestHours(rows,config,period,cutoff),rows};
+ });
+ const entry={expiresAt:now+45_000,promise};
+ sharedBestHours.set(key,entry);
+ while(sharedBestHours.size>32){const oldest=sharedBestHours.keys().next().value;if(oldest===undefined)break;sharedBestHours.delete(oldest);}
+ void promise.catch(()=>{if(sharedBestHours.get(key)===entry)sharedBestHours.delete(key);});
+ return promise;
+}
