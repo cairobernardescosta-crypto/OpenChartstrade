@@ -67,6 +67,7 @@ import { NewsOverlay } from "./NewsOverlay.tsx";
 import { ObjectTreePanel } from "./ObjectTreePanel.tsx";
 import { useChallengeLevels } from "./useChallengeLevels.ts";
 import { useIndicators } from "./useIndicators.ts";
+import type { OverrideScope } from "../../lib/indicator-sdk/instances";
 import { useNewsOverlay } from "./useNewsOverlay.ts";
 import { useSlTpDrag } from "./useSlTpDrag.ts";
 import { useChartData } from "./chartData.ts";
@@ -214,6 +215,7 @@ export interface ChartPanelProps {
   isDark: boolean;
   activeIndicators: IndicatorType[];
   indicatorScope?: "primary" | "secondary";
+  indicatorOverrideScope?: OverrideScope;
   drawingTool: DrawingTool;
   drawings: DrawingLine[];
   onAddDrawing: (d: DrawingLine) => void;
@@ -1091,6 +1093,7 @@ export function ChartPanel({
   isDark,
   activeIndicators,
   indicatorScope = "primary",
+  indicatorOverrideScope,
   drawingTool,
   drawings,
   onAddDrawing,
@@ -1424,7 +1427,7 @@ export function ChartPanel({
     [onAddDrawing, pipDigits, timeframe, selectedSymbol],
   );
 
-  useIndicators(chartRef, candleSeriesRef, chartData, activeIndicators, isDark, volumeData, indicatorScope, (TF_INTERVAL_MS[timeframe] ?? 60000)/1000, chartEpoch, volumeSeriesRef, isReplaying, selectedSymbol,paneRootRef,colors);
+  useIndicators(chartRef, candleSeriesRef, chartData, activeIndicators, isDark, volumeData, indicatorScope, (TF_INTERVAL_MS[timeframe] ?? 60000)/1000, chartEpoch, volumeSeriesRef, isReplaying, selectedSymbol,paneRootRef,colors,indicatorOverrideScope??indicatorScope);
 
   // ── Replay trade event markers ─────────────────────────────
   useEffect(() => {
