@@ -16,7 +16,7 @@ import { ChartPanel } from "./trading/ChartPanel.tsx";
 import { ChartToolbar } from "./trading/ChartToolbar.tsx";
 import { REPLAY_ENABLED, type DrawingTool, type Timeframe } from "./trading/constants.ts";
 import { getPipDigits } from "./trading/utils.ts";
-import { syncLinkedOverrides } from "../lib/indicator-sdk/instances";
+import { detachLinkedOverrides, syncLinkedOverrides } from "../lib/indicator-sdk/instances";
 
  // Optional panels are split into separate chunks and fetched only when opened.
 const DOMPanel = lazy(() => import("./trading/DOMPanel.tsx").then((m) => ({ default: m.DOMPanel })));
@@ -394,7 +394,9 @@ export function TradingPage() {
             });
             return;
           }
-          setChartsLinked(false);
+          void detachLinkedOverrides().finally(() => {
+            if (linkingRequestRef.current === request) setChartsLinked(false);
+          });
         }}
         indicatorScope={activeChart}
         indicatorOverrideScope={chartsLinked ? "linked" : activeChart}
