@@ -15,6 +15,7 @@ import { BottomPanel } from "./trading/BottomPanel.tsx";
 import { ChartPanel } from "./trading/ChartPanel.tsx";
 import { ChartToolbar } from "./trading/ChartToolbar.tsx";
 import { REPLAY_ENABLED, type DrawingTool, type Timeframe } from "./trading/constants.ts";
+import { resolveIndicatorSettingsScope } from "./trading/chart-linking.ts";
 import { getPipDigits } from "./trading/utils.ts";
 
  // Optional panels are split into separate chunks and fetched only when opened.
@@ -151,6 +152,10 @@ export function TradingPage() {
   const [linkedSource, setLinkedSource] = useState<"primary" | "secondary">(
     initialLayout.linkedSource === "secondary" ? "secondary" : "primary",
   );
+  const selectActiveChart = useCallback((chart: "primary" | "secondary") => {
+    setActiveChart(chart);
+    if (chartsLinked) setLinkedSource(chart);
+  }, [chartsLinked]);
   const secondaryPrefs=useChartPreferences("secondary");
   const focusedPrefs=activeChart==="primary"?chartPrefs:secondaryPrefs;
   // The secondary chart owns its market and indicator state. It starts on 1h
@@ -201,7 +206,7 @@ export function TradingPage() {
       if (target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "")) return;
       if (event.key === "1") {
         event.preventDefault();
-        setActiveChart("primary");
+        selectActiveChart("primary");
         setChartLayout("single");
       } else if (event.key === "2") {
         event.preventDefault();
@@ -210,7 +215,7 @@ export function TradingPage() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [selectActiveChart]);
 
   const [bottomTab, setBottomTab] = useState<
     "positions" | "orders" | "history" | "journal" | "calendar" | "news"
@@ -377,7 +382,7 @@ export function TradingPage() {
         onTimeframeChange={activeChart === "primary" ? handleTimeframeChange : setSecondaryTimeframe}
         chartLayout={chartLayout}
         onChartLayoutChange={(layout) => {
-          if (layout === "single") setActiveChart("primary");
+          if (layout === "single") selectActiveChart("primary");
           setChartLayout(layout);
         }}
         chartsLinked={chartsLinked}
@@ -385,7 +390,7 @@ export function TradingPage() {
           if (linked) setLinkedSource(activeChart);
           setChartsLinked(linked);
         }}
-        indicatorScope={activeChart}
+        indicatorScope={resolveIndicatorSettingsScope(activeChart, chartsLinked, linkedSource)}
         activeIndicators={chartsLinked ? linkedIndicators : activeChart === "primary" ? activeIndicators : secondaryIndicators}
         onToggleIndicator={chartsLinked ? linkedToggleIndicator : activeChart === "primary" ? toggleIndicator : toggleSecondaryIndicator}
         showIndicatorMenu={showIndicatorMenu}
@@ -430,12 +435,14 @@ export function TradingPage() {
         <div className="relative flex flex-col flex-1 min-w-0">
           {/* Chart Area. Split mode initially mirrors the primary chart configuration. */}
           <div className={`flex-1 min-h-[200px] relative ${chartLayout === "split" ? "grid grid-cols-1 grid-rows-2 md:grid-cols-2 md:grid-rows-1 gap-px bg-border" : ""}`}>
-            <div className={`min-w-0 min-h-0 h-full relative overflow-hidden ${activeChart === "primary" && chartLayout === "split" ? "ring-1 ring-inset ring-primary/50" : ""}`} onPointerDownCapture={() => setActiveChart("primary")}>
+            <div className={`min-w-0 min-h-0 h-full relative overflow-hidden ${activeChart === "primary" && chartLayout === "split" ? "ring-1 ring-inset ring-primary/50" : ""}`} onPointerDownCapture={() => selectActiveChart("primary")}>
             <ChartPanel
               candles={replayCandles ?? candles ?? []}
               selectedSymbol={selectedSymbol}
               timeframe={replayCandles ? "1m" : timeframe}
               isDark={isDark}
+              indicatorScope="primary"
+              indicatorSettingsScope={resolveIndicatorSettingsScope("primary", chartsLinked, linkedSource)}
               activeIndicators={chartsLinked ? linkedIndicators : activeIndicators}
               drawingTool={chartsLinked ? linkedDrawingTool : drawingTool}
               drawings={chartsLinked ? linkedDrawings : drawings}
@@ -467,7 +474,7 @@ export function TradingPage() {
             />
             </div>
             {chartLayout === "split" && (
-              <div className={`flex min-w-0 min-h-0 flex-col overflow-hidden bg-background ${activeChart === "secondary" ? "ring-1 ring-inset ring-primary/50" : ""}`} onPointerDownCapture={() => setActiveChart("secondary")}>
+              <div className={`flex min-w-0 min-h-0 flex-col overflow-hidden bg-background ${activeChart === "secondary" ? "ring-1 ring-inset ring-primary/50" : ""}`} onPointerDownCapture={() => selectActiveChart("secondary")}>
                 <div className="relative min-h-0 flex-1 overflow-hidden">
                   <ChartPanel
                     key="secondary"
@@ -476,6 +483,7 @@ export function TradingPage() {
                     timeframe={secondaryTimeframe}
                     isDark={isDark}
                     indicatorScope="secondary"
+                    indicatorSettingsScope={resolveIndicatorSettingsScope("secondary", chartsLinked, linkedSource)}
                     activeIndicators={chartsLinked ? linkedIndicators : secondaryIndicators}
                     drawingTool={chartsLinked ? linkedDrawingTool : secondaryDrawingTool}
                     drawings={chartsLinked ? linkedDrawings : secondaryDrawings}

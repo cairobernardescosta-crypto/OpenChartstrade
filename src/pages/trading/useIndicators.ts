@@ -55,6 +55,7 @@ export function useIndicators(
   symbol="",
   paneRoot?:React.RefObject<HTMLDivElement|null>,
   visualColors?:PaneColors,
+  settingsScope:ChartScope = scope,
 ): void {
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<"Line"> | ISeriesApi<"Histogram"> | ISeriesApi<"Area">>>(
     new Map(),
@@ -72,7 +73,7 @@ export function useIndicators(
   const independentHistory=useMemo(()=>new IndependentHistoryCache((symbol,timeframe,limit,toMs)=>adapter?adapter.marketData.getCandles({symbol,timeframe,limit,toMs}):Promise.reject(Error("Provedor indisponível"))),[adapter]);
   const library = useIndicatorLibrary();
   const admin = useIndicatorAdmin();
-  const overrides = useOverrides(scope);
+  const overrides = useOverrides(settingsScope);
   const colors = visualColors??(isDark ? CHART_COLORS.dark : CHART_COLORS.light);
   const trendColors = isDark ? CHART_COLORS.dark : CHART_COLORS.light;
   const [history,setHistory]=useState<{key:string;rows:Record<string,CandleData[]>;errors?:Record<string,string>}>({key:"",rows:{}});

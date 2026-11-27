@@ -214,6 +214,8 @@ export interface ChartPanelProps {
   isDark: boolean;
   activeIndicators: IndicatorType[];
   indicatorScope?: "primary" | "secondary";
+  /** Override source used for imported indicator settings while charts are linked. */
+  indicatorSettingsScope?: "primary" | "secondary";
   drawingTool: DrawingTool;
   drawings: DrawingLine[];
   onAddDrawing: (d: DrawingLine) => void;
@@ -1091,6 +1093,7 @@ export function ChartPanel({
   isDark,
   activeIndicators,
   indicatorScope = "primary",
+  indicatorSettingsScope = indicatorScope,
   drawingTool,
   drawings,
   onAddDrawing,
@@ -1424,7 +1427,7 @@ export function ChartPanel({
     [onAddDrawing, pipDigits, timeframe, selectedSymbol],
   );
 
-  useIndicators(chartRef, candleSeriesRef, chartData, activeIndicators, isDark, volumeData, indicatorScope, (TF_INTERVAL_MS[timeframe] ?? 60000)/1000, chartEpoch, volumeSeriesRef, isReplaying, selectedSymbol,paneRootRef,colors);
+  useIndicators(chartRef, candleSeriesRef, chartData, activeIndicators, isDark, volumeData, indicatorScope, (TF_INTERVAL_MS[timeframe] ?? 60000)/1000, chartEpoch, volumeSeriesRef, isReplaying, selectedSymbol,paneRootRef,colors,indicatorSettingsScope);
 
   // ── Replay trade event markers ─────────────────────────────
   useEffect(() => {
