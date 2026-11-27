@@ -14,7 +14,7 @@ export class SessionCandlePrimitive extends PluginBase {
     super();
     this.view={renderer:()=>({draw:(target:CanvasRenderingTarget2D)=>this.draw(target)} satisfies ISeriesPrimitivePaneRenderer)};
   }
-  public override attached(param:Parameters<PluginBase["attached"]>[0]) {super.attached(param);this.refresh();if(!this.replayData)this.timer=setInterval(()=>this.refresh(),1000);}
+  public override attached(param:Parameters<PluginBase["attached"]>[0]) {if(this.timer!==undefined)clearInterval(this.timer);this.timer=undefined;super.attached(param);this.refresh();if(!this.replayData)this.timer=setInterval(()=>this.refresh(),1000);}
   public override detached(){if(this.timer!==undefined)clearInterval(this.timer);this.timer=undefined;super.detached();}
   protected override dataUpdated(_scope:DataChangedScope) {this.refresh();}
   private refresh() {
