@@ -1,6 +1,6 @@
 import {describe,expect,it} from "vitest";
 import {indicatorSchema} from "../lib/indicator-sdk/schema";
-import {independentOverridesFromLinked,linkedOverridesFrom,validateOverrides} from "../lib/indicator-sdk/instances";
+import {hasPersistedLinkedScope,independentOverridesFromLinked,linkedOverridesFrom,validateOverrides} from "../lib/indicator-sdk/instances";
 
 const definition=indicatorSchema.parse({
   sdk:1,id:"linked-test",name:"Linked test",version:"1.0.0",kind:"session-candle",
@@ -33,6 +33,10 @@ describe("linked chart configuration lifecycle",()=>{
     expect(restored.primary[0]?.color).toBe("#101010");
     expect(restored.secondary[0]?.color).toBe("#202020");
     expect(restored.linked[0]).toMatchObject({color:"#303030",bestHoursPeriod:30});
+  });
+  it("migrates only storage created before the linked scope existed",()=>{
+    expect(hasPersistedLinkedScope({primary:[],secondary:[]})).toBe(false);
+    expect(hasPersistedLinkedScope({primary:[],secondary:[],linked:[]})).toBe(true);
   });
   it("migrates pre-linking persisted state without losing either chart scope",()=>{
     const restored=validateOverrides({primary:[{...definition,color:"#111111"}],secondary:[{...definition,color:"#222222"}]});
