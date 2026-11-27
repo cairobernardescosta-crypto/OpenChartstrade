@@ -394,7 +394,9 @@ export function TradingPage() {
             });
             return;
           }
-          void detachLinkedOverrides().finally(() => {
+          void detachLinkedOverrides().then(() => {
+            if (linkingRequestRef.current === request) setChartsLinked(false);
+          }, () => {
             if (linkingRequestRef.current === request) setChartsLinked(false);
           });
         }}
