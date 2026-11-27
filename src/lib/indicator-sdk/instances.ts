@@ -33,4 +33,4 @@ export function applyRestoredOverrides(data:ReturnType<typeof validateOverrides>
 
 /** Copies the selected chart settings into the isolated linked scope. The original chart scopes are never modified. */
 export function linkedOverridesFrom(source:ChartScope,overrides:Overrides=state):ImportedIndicator[]{return overrides[source].map(entry=>({...entry,parameters:entry.parameters.map(parameter=>({...parameter})),graphics:entry.graphics.map(graphic=>({...graphic}))}));}
-export function syncLinkedOverrides(source:ChartScope){commit({...state,linked:linkedOverridesFrom(source)});}
+export async function syncLinkedOverrides(source:ChartScope){await hydration;commit({...state,linked:linkedOverridesFrom(source)});}
