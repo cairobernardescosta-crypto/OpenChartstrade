@@ -102,7 +102,7 @@ export function IndicatorLibraryMenu({active,toggle,scope="primary",symbol="",ti
           {label:"Duplicar",run:()=>attempt(()=>duplicateIndicator(x.id))},
           {label:"Histórico de versões",disabled:versions(x.id).length===0,run:()=>setRevisionId(revisionId===x.id?null:x.id)},
           {label:"Ver código",run:()=>setViewSource("export default "+JSON.stringify(x,null,2)+";")},
-          {label:"Voltar à definição global neste gráfico",disabled:!hasOverride&&!staleOverride,run:()=>attempt(()=>{if(!window.confirm("Remover a personalização do "+chartLabel+"? A definição global não será alterada."))return;resetOverride(effectiveOverrideScope,x.id);if(draft?.id===x.id&&editTarget===scope)setDraft(null);})},
+          {label:"Voltar à definição global neste gráfico",disabled:!hasOverride&&!staleOverride,run:()=>attempt(()=>{if(!window.confirm("Remover a personalização do "+chartLabel+"? A definição global não será alterada."))return;resetOverride(effectiveOverrideScope,x.id);if(draft?.id===x.id&&editTarget===effectiveOverrideScope)setDraft(null);})},
           {label:"Exportar (.ts)",run:()=>{const url=URL.createObjectURL(new Blob(["export default "+JSON.stringify(x,null,2)+";"],{type:"text/plain"}));const a=document.createElement("a");a.href=url;a.download=x.id+".ts";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}},
            {label:"Desinstalar",danger:true,run:()=>attempt(async()=>{if(!window.confirm("Desinstalar "+x.name+"?"))return;await removeIndicator(x.id);clearOverrides(x.id);if(active.includes(id))toggle(id);void playSound("warning","indicators");})}
         ]}/>
