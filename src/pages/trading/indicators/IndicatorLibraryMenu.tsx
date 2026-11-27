@@ -10,14 +10,14 @@ import {IndicatorAdminPanel} from "./IndicatorAdminPanel";
 import {IndicatorPreview} from "./IndicatorPreview";
 import {useIndicatorAdmin} from "../../../lib/indicator-sdk/admin";
 import {usePersistenceError} from "../../../lib/indicator-sdk/database";
-import { useOverrides, saveOverride, resetOverride, clearOverrides, resolveIndicator, type ChartScope } from "../../../lib/indicator-sdk/instances";
+import { useOverrides, saveOverride, resetOverride, clearOverrides, resolveIndicator, type ChartScope, type OverrideScope } from "../../../lib/indicator-sdk/instances";
 import type { CandleData,IndicatorType } from "../../../lib/indicators";
 import { HTF_EXAMPLE, parseIndicator, indicatorSchema, type ImportedIndicator } from "../../../lib/indicator-sdk/schema";
 import { useIndicatorLibrary, installIndicator, updateIndicator, removeIndicator, duplicateIndicator, versions, revisionEntries, restoreRevisionEntry, setIndicatorFavorite, getLibraryError } from "../../../lib/indicator-sdk/storage";
 import {playSound} from "../../../services/audio";
 import {useBestHoursStatuses} from "../../../lib/indicator-sdk/best-hours-status";
 
-export function IndicatorLibraryMenu({active,toggle,scope="primary",symbol="",timeframe="1m",replay=false,previewCandles}:{active: IndicatorType[];toggle:(type:IndicatorType)=>void;scope?:ChartScope;symbol?:string;timeframe?:string;replay?:boolean;previewCandles?:readonly CandleData[]}) {
+export function IndicatorLibraryMenu({active,toggle,scope="primary",symbol="",timeframe="1m",replay=false,previewCandles,overrideScope}:{active: IndicatorType[];toggle:(type:IndicatorType)=>void;scope?:ChartScope;overrideScope?:OverrideScope;symbol?:string;timeframe?:string;replay?:boolean;previewCandles?:readonly CandleData[]}) {
   const library=useIndicatorLibrary();
   const adapter=useMarketAdapter();
   const historyStatuses=useHistoryStatuses();
@@ -26,11 +26,12 @@ export function IndicatorLibraryMenu({active,toggle,scope="primary",symbol="",ti
   const storageError=usePersistenceError();
   const [viewSource,setViewSource]=useState<string|null>(null);
   const [showAdmin,setShowAdmin]=useState(false);
-  const overrides=useOverrides(scope);
-  const [editTarget,setEditTarget]=useState<"global"|ChartScope>("global");
+  const effectiveOverrideScope=overrideScope??scope;
+  const overrides=useOverrides(effectiveOverrideScope);
+  const [editTarget,setEditTarget]=useState<"global"|OverrideScope>("global");
   const localEdit=editTarget!=="global";
-  const chartLabel=scope==="primary"?"gráfico principal":"gráfico secundário";
-  const editLabel=editTarget==="primary"?"gráfico principal":"gráfico secundário";
+  const chartLabel=effectiveOverrideScope==="linked"?"gráficos vinculados":scope==="primary"?"gráfico principal":"gráfico secundário";
+  const editLabel=editTarget==="linked"?"gráficos vinculados":editTarget==="primary"?"gráfico principal":"gráfico secundário";
   const [source,setSource]=useState("");
   const [open,setOpen]=useState(false);
   const [error,setError]=useState("");
@@ -96,12 +97,12 @@ export function IndicatorLibraryMenu({active,toggle,scope="primary",symbol="",ti
         {active.includes(id)&&<p className="basis-full text-[10px] text-muted-foreground break-words">Fonte configurada: {providerLabel(adapter)} · {symbol} · {dataPathLabel(configuredPath(effective),replay)}{configuredPath(effective)==="chart"?" · "+timeframe:""}</p>}
         {history&&<div role={history.phase==="error"?"alert":"status"} className="basis-full text-[10px] text-muted-foreground break-words"><span className={history.phase==="loading"||history.phase==="refreshing"?"animate-pulse":history.phase==="error"?"text-red-400":""}>{historyStatusLabel(history.phase)}</span>{history.bars>0&&<span> · {history.bars} velas</span>}{history.message&&(history.phase==="error"?<IndicatorErrorNotice error={history.message} context="history"/>:<p>{history.message}</p>)}{history.phase==="ready"&&<span> · {new Date(history.updatedAt).toLocaleTimeString("pt-BR")}</span>}</div>}
         <IndicatorActions name={x.name} actions={[
-          {label:"Editar neste gráfico",run:()=>{setEditTarget(scope);setDraft(resolveIndicator(x,overrides));}},
+          {label:"Editar neste gráfico",run:()=>{setEditTarget(effectiveOverrideScope);setDraft(resolveIndicator(x,overrides));}},
           {label:"Editar definição global",run:()=>{setEditTarget("global");setDraft(x);}},
           {label:"Duplicar",run:()=>attempt(()=>duplicateIndicator(x.id))},
           {label:"Histórico de versões",disabled:versions(x.id).length===0,run:()=>setRevisionId(revisionId===x.id?null:x.id)},
           {label:"Ver código",run:()=>setViewSource("export default "+JSON.stringify(x,null,2)+";")},
-          {label:"Voltar à definição global neste gráfico",disabled:!hasOverride&&!staleOverride,run:()=>attempt(()=>{if(!window.confirm("Remover a personalização do "+chartLabel+"? A definição global não será alterada."))return;resetOverride(scope,x.id);if(draft?.id===x.id&&editTarget===scope)setDraft(null);})},
+          {label:"Voltar à definição global neste gráfico",disabled:!hasOverride&&!staleOverride,run:()=>attempt(()=>{if(!window.confirm("Remover a personalização do "+chartLabel+"? A definição global não será alterada."))return;resetOverride(effectiveOverrideScope,x.id);if(draft?.id===x.id&&editTarget===scope)setDraft(null);})},
           {label:"Exportar (.ts)",run:()=>{const url=URL.createObjectURL(new Blob(["export default "+JSON.stringify(x,null,2)+";"],{type:"text/plain"}));const a=document.createElement("a");a.href=url;a.download=x.id+".ts";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}},
            {label:"Desinstalar",danger:true,run:()=>attempt(async()=>{if(!window.confirm("Desinstalar "+x.name+"?"))return;await removeIndicator(x.id);clearOverrides(x.id);if(active.includes(id))toggle(id);void playSound("warning","indicators");})}
         ]}/>
