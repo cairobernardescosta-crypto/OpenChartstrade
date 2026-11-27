@@ -1,5 +1,5 @@
-import {describe,expect,it} from "vitest";
-import {analyzeBestHours} from "../lib/indicator-sdk/best-hours";
+import {describe,expect,it,vi} from "vitest";
+import {analyzeBestHours,loadBestHoursSnapshot} from "../lib/indicator-sdk/best-hours";
 import {indicatorSchema} from "../lib/indicator-sdk/schema";
 import type {CandleData} from "../lib/indicators";
 
@@ -8,6 +8,7 @@ const bar=(time:number,low=100,high=101):CandleData=>({time,open:low,high,low,cl
 const base=indicatorSchema.parse({sdk:1,id:"htf",name:"HTF",version:"1.0.0",kind:"session-candle",sessionSchedule:"utc-24h",timezone:"UTC"});
 
 describe("best trading hours",()=>{
+ it("shares one fetch and analysis snapshot between linked charts",async()=>{const cutoff=Date.UTC(2026,0,8)/1000;const load=vi.fn(async()=>[bar(cutoff-2*hour)]);const key="linked-best-hours-test";const first=loadBestHoursSnapshot(key,load,base,1,cutoff);const second=loadBestHoursSnapshot(key,load,base,1,cutoff);expect(load).toHaveBeenCalledTimes(1);const [a,b]=await Promise.all([first,second]);expect(a).toBe(b);expect(a.analysis.period).toBe(1);});
  it("keeps schema defaults backward compatible",()=>expect(base).toMatchObject({bestHoursEnabled:false,bestHoursPeriod:7,bestHoursCount:3,bestHoursLineStyle:"dashed"}));
  it("calculates mean, median, population deviation and ranking",()=>{const cutoff=Date.UTC(2026,0,8)/1000;const rows=[bar(cutoff-7*86400+10*hour,100,102),bar(cutoff-6*86400+10*hour,100,104),bar(cutoff-5*86400+10*hour,100,106),bar(cutoff-7*86400+11*hour,100,101),bar(cutoff-6*86400+11*hour,100,101),bar(cutoff-5*86400+11*hour,100,101)];const result=analyzeBestHours(rows,base,7,cutoff);expect(result.ranking[0]).toMatchObject({hour:10,mean:4,median:4,observations:3,consistency:"moderate"});expect(result.ranking[0]!.standardDeviation).toBeCloseTo(Math.sqrt(8/3));});
  it("uses observation minimums for each period",()=>{const cutoff=Date.UTC(2026,1,1)/1000;const make=(count:number)=>Array.from({length:count},(_,i)=>bar(cutoff-(i+1)*86400+9*hour));expect(analyzeBestHours(make(1),base,1,cutoff).ranking).toHaveLength(1);expect(analyzeBestHours(make(2),base,7,cutoff).insufficient).toBe(true);expect(analyzeBestHours(make(5),base,15,cutoff).ranking).toHaveLength(1);expect(analyzeBestHours(make(7),base,30,cutoff).insufficient).toBe(true);});
