@@ -35,7 +35,7 @@ import {IndependentHistoryCache,historyPlan,historyMaxAge,historyPointExpiry} fr
 import type {CandleData} from "../../lib/indicators";
 import {IndicatorPanes,nativePaneKey,type PaneColors} from "./indicator-panes";
 import { CHART_COLORS } from "./constants.ts";
-import {analyzeBestHours,type BestHoursAnalysis} from "../../lib/indicator-sdk/best-hours.ts";
+import {loadBestHoursSnapshot,type BestHoursAnalysis} from "../../lib/indicator-sdk/best-hours.ts";
 import {publishBestHours,retainBestHours} from "../../lib/indicator-sdk/best-hours-status.ts";
 
 
@@ -385,8 +385,8 @@ export function useIndicators(
   const bestHoursDefinitions=JSON.stringify(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind==="session-candle"&&x.bestHoursEnabled).flatMap(x=>x.sessionSchedule!=="automatic"?[x]:schedules.key===scheduleKey&&schedules.entries[x.id]?[schedules.entries[x.id]!.config]:[]));
   const bestHoursKey=JSON.stringify([symbol,isReplaying,replayCutoff,bestHoursDefinitions,adapterToken]);
   const [bestHours,setBestHours]=useState<{key:string;entries:Record<string,{analysis:BestHoursAnalysis;rows:CandleData[]}>}>({key:"",entries:{}});
-  useEffect(()=>{const entries=JSON.parse(bestHoursDefinitions) as ImportedIndicator[];retainBestHours(scope,entries.map(entry=>entry.id));if(!entries.length||!symbol||!adapter)return;let disposed=false;let busy=false;
-    const refresh=async()=>{if(busy)return;busy=true;const cutoff=isReplaying?replayCutoff:Math.floor(Date.now()/1000);try{const rows=[...await adapter.marketData.getCandles({symbol,timeframe:"1h",limit:Math.min(720,admin.maxBars),toMs:cutoff*1000})] as CandleData[];const values:Record<string,{analysis:BestHoursAnalysis;rows:CandleData[]}>={};for(const entry of entries){const analysis=analyzeBestHours(rows,entry,entry.bestHoursPeriod,cutoff);values[entry.id]={analysis,rows};publishBestHours({scope,symbol,id:entry.id,analysis,error:"",updatedAt:Date.now()});}if(!disposed)setBestHours({key:bestHoursKey,entries:values});}catch(error){const message=error instanceof Error?error.message:String(error);for(const entry of entries)publishBestHours({scope,symbol,id:entry.id,error:message,updatedAt:Date.now()});}finally{busy=false;}};
+  useEffect(()=>{const entries=JSON.parse(bestHoursDefinitions) as ImportedIndicator[];retainBestHours(scope,symbol,entries.map(entry=>entry.id));if(!entries.length||!symbol||!adapter)return;let disposed=false;let busy=false;
+    const refresh=async()=>{if(busy)return;busy=true;const cutoff=isReplaying?replayCutoff:Math.floor(Date.now()/60)*60;try{const limit=Math.min(720,admin.maxBars);const values:Record<string,{analysis:BestHoursAnalysis;rows:CandleData[]}>={};for(const entry of entries){const analysisConfig={days:entry.days,open:entry.open,close:entry.close,timezone:entry.timezone};const cacheKey=JSON.stringify([symbol,isReplaying?replayCutoff:"live",Math.floor(cutoff/60),limit,adapterToken,entry.id,entry.bestHoursPeriod,analysisConfig]);const snapshot=await loadBestHoursSnapshot(cacheKey,()=>adapter.marketData.getCandles({symbol,timeframe:"1h",limit,toMs:cutoff*1000}) as Promise<CandleData[]>,entry,entry.bestHoursPeriod,cutoff);values[entry.id]=snapshot;publishBestHours({scope,symbol,id:entry.id,analysis:snapshot.analysis,error:"",updatedAt:Date.now()});}if(!disposed)setBestHours({key:bestHoursKey,entries:values});}catch(error){const message=error instanceof Error?error.message:String(error);for(const entry of entries)publishBestHours({scope,symbol,id:entry.id,error:message,updatedAt:Date.now()});}finally{busy=false;}};
     void refresh();const timer=isReplaying?undefined:setInterval(()=>void refresh(),60000);return()=>{disposed=true;if(timer!==undefined)clearInterval(timer);};
   },[bestHoursDefinitions,bestHoursKey,symbol,isReplaying,replayCutoff,adapterToken,adapter,admin.maxBars,scope]);
   useEffect(() => {
