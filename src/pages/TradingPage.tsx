@@ -16,7 +16,7 @@ import { ChartPanel } from "./trading/ChartPanel.tsx";
 import { ChartToolbar } from "./trading/ChartToolbar.tsx";
 import { REPLAY_ENABLED, type DrawingTool, type Timeframe } from "./trading/constants.ts";
 import { getPipDigits } from "./trading/utils.ts";
-import { detachLinkedOverrides, syncLinkedOverrides } from "../lib/indicator-sdk/instances";
+import { detachLinkedOverrides, ensureLinkedOverrides, syncLinkedOverrides } from "../lib/indicator-sdk/instances";
 
  // Optional panels are split into separate chunks and fetched only when opened.
 const DOMPanel = lazy(() => import("./trading/DOMPanel.tsx").then((m) => ({ default: m.DOMPanel })));
@@ -153,6 +153,7 @@ export function TradingPage() {
     initialLayout.linkedSource === "secondary" ? "secondary" : "primary",
   );
   const linkingRequestRef = useRef(0);
+  useEffect(() => { if (chartsLinked) void ensureLinkedOverrides(linkedSource); }, [chartsLinked, linkedSource]);
   const secondaryPrefs=useChartPreferences("secondary");
   const focusedPrefs=activeChart==="primary"?chartPrefs:secondaryPrefs;
   // The secondary chart owns its market and indicator state. It starts on 1h
