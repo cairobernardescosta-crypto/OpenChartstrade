@@ -10,16 +10,13 @@ export interface SessionRange {
 
 // Convert a civil minute to UTC, respecting IANA zone offsets. Reject nonexistent
 // local times rather than silently moving a session boundary.
-function civilTime(day: number, minute: number, fmt: Intl.DateTimeFormat): number | null {
-  const target = day * 86400000 + minute * 60000;
-  let guess = target;
-  for (let i = 0; i < 5; i++) {
-    const p = parts(guess, fmt);
-    const actual = p.day * 86400000 + p.minute * 60000;
-    if (actual === target) return guess / 1000;
-    guess += target - actual;
-  }
-  return null;
+function civilTime(day:number,minute:number,fmt:Intl.DateTimeFormat,prefer:"earlier"|"later"="earlier"):number|null {
+  const target=day*86400000+minute*60000;let guess=target;
+  for(let i=0;i<6;i++){const p=parts(guess,fmt),actual=p.day*86400000+p.minute*60000,delta=target-actual;if(delta===0)break;guess+=delta;}
+  const candidates:number[]=[];
+  for(let offset=-180;offset<=180;offset+=30){const candidate=guess+offset*60000,p=parts(candidate,fmt);if(p.day*86400000+p.minute*60000===target)candidates.push(candidate);}
+  if(!candidates.length)return null;
+  return (prefer==="later"?Math.max(...candidates):Math.min(...candidates))/1000;
 }
 function parts(ms: number, fmt: Intl.DateTimeFormat) {
   const p = Object.fromEntries(fmt.formatToParts(new Date(ms)).map(x => [x.type, x.value]));
@@ -40,7 +37,7 @@ export function sessionBounds(config:ImportedIndicator,cursor:number){
   if(!calendar){let eligible=false;for(let i=0;i<7;i++,day--){if(config.days.includes(new Date(day*86400000).getUTCDay())){eligible=true;break;}}if(!eligible)return null;}
   let endDay=day+(c<=o?1:0);
   if(config.sessionMinutes==="week"){const weekday=new Date(day*86400000).getUTCDay();day-=(weekday+6)%7;endDay=day+7;}else if(config.sessionMinutes==="month"){const date=new Date(day*86400000);day=Date.UTC(date.getUTCFullYear(),date.getUTCMonth(),1)/86400000;endDay=Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+1,1)/86400000;}
-  const start = civilTime(day,o,fmt), end = civilTime(endDay,calendar?o:c,fmt);
+  const start = civilTime(day,o,fmt,"earlier"), end = civilTime(endDay,calendar?o:c,fmt,"later");
   if (start === null || end === null || end<=start) return null;
   const duration=config.sessionMinutes==="session"||calendar?0:Number(config.sessionMinutes)*60;
   const segment=duration?Math.max(0,Math.floor((Math.min(cursor,end-1)-start)/duration)):0;
@@ -54,13 +51,16 @@ export function sessionRange(candles:readonly CandleData[],config:ImportedIndica
   const cursor=clockSeconds??last.time;
   const bounds=sessionBounds(config,cursor);if(!bounds)return null;
   const {start,end,rangeStart,rangeEnd}=bounds;
-  if(sourceSeconds!==undefined&&(!Number.isInteger(sourceSeconds)||sourceSeconds<=0||rangeStart%sourceSeconds!==0||rangeEnd%sourceSeconds!==0))return null;
+  if(sourceSeconds!==undefined&&(!Number.isInteger(sourceSeconds)||sourceSeconds<=0))return null;
   const calendar=config.sessionMinutes==="week"||config.sessionMinutes==="month";
   const policy=config.sessionSchedule==="utc-24h"?"continuous":config.gapPolicy;
-  let expected=rangeStart;
+  const firstComplete=sourceSeconds===undefined?rangeStart:Math.ceil(rangeStart/sourceSeconds)*sourceSeconds;
+  const sessionThrough=sourceSeconds===undefined?rangeEnd:Math.floor(rangeEnd/sourceSeconds)*sourceSeconds;
+  if(sourceSeconds!==undefined&&firstComplete>=rangeEnd)return null;
+  let expected=firstComplete;
   let out: SessionRange | null = null;
   for (const bar of candles) {
-    if (bar.time < rangeStart || bar.time >= rangeEnd || bar.time>cursor || (closedOnly&&sourceSeconds!==undefined&&bar.time+sourceSeconds>cursor)) continue;
+    if (bar.time < firstComplete || bar.time >= rangeEnd || bar.time>cursor || (sourceSeconds!==undefined&&bar.time+sourceSeconds>rangeEnd) || (closedOnly&&sourceSeconds!==undefined&&bar.time+sourceSeconds>cursor)) continue;
     if (!validMarketBar(bar)){if(sourceSeconds!==undefined)return null;continue;}
     if(sourceSeconds!==undefined){if(bar.time!==expected&&(!calendar||missingOpenBars(expected,bar.time,sourceSeconds,policy)!==0))return null;expected=bar.time+sourceSeconds;}
     if (!out) out = {start:rangeStart,end:rangeEnd,open:bar.open,high:bar.high,low:bar.low,close:bar.close,highTime:bar.time,lowTime:bar.time};
@@ -70,7 +70,7 @@ export function sessionRange(candles:readonly CandleData[],config:ImportedIndica
       out.close=bar.close;
     }
   }
-  if(out&&sourceSeconds!==undefined&&(cursor>=rangeEnd||closedOnly)){const through=Math.min(rangeEnd,Math.floor(cursor/sourceSeconds)*sourceSeconds);if(expected!==through&&(!calendar||missingOpenBars(expected,through,sourceSeconds,policy)!==0))return null;}
+  if(out&&sourceSeconds!==undefined&&(cursor>=rangeEnd||closedOnly)){const through=Math.min(sessionThrough,Math.floor(cursor/sourceSeconds)*sourceSeconds);if(expected!==through&&(!calendar||missingOpenBars(expected,through,sourceSeconds,policy)!==0))return null;}
   if(out){out.sessionStart=start;out.sessionEnd=end;out.closed=cursor>=rangeEnd;}
   return out;
 }
