@@ -384,13 +384,14 @@ export function useIndicators(
   },[sessionDefinitions,symbol,isReplaying,replayCutoff,sessionKey,admin.maxBars,scope,sessionHistoryCache]);
   const bestHoursDefinitions=JSON.stringify(library.filter(x=>allowedCustom.includes(`custom:${x.id}`)).map(x=>resolveIndicator(x,overrides)).filter(x=>x.visible&&x.kind==="session-candle"&&x.bestHoursEnabled).flatMap(x=>x.sessionSchedule!=="automatic"?[x]:schedules.key===scheduleKey&&schedules.entries[x.id]?[schedules.entries[x.id]!.config]:[]));
   const bestHoursAnalysisKey=bestHoursAnalysisSignature(JSON.parse(bestHoursDefinitions) as ImportedIndicator[]);
-  const bestHoursDefinitionsRef=useRef(bestHoursDefinitions);bestHoursDefinitionsRef.current=bestHoursDefinitions;
+  // Keep the last equivalent analysis snapshot when only drawing controls change.
+  const bestHoursEntries=useMemo(()=>JSON.parse(bestHoursDefinitions) as ImportedIndicator[],[bestHoursAnalysisKey]);
   const bestHoursKey=JSON.stringify([symbol,isReplaying,replayCutoff,bestHoursAnalysisKey,Math.min(720,admin.maxBars),adapterToken]);
   const [bestHours,setBestHours]=useState<{key:string;entries:Record<string,{analysis:BestHoursAnalysis;rows:CandleData[]}>}>({key:"",entries:{}});
-  useEffect(()=>{const entries=JSON.parse(bestHoursDefinitionsRef.current) as ImportedIndicator[];retainBestHours(scope,symbol,entries.map(entry=>entry.id));if(!entries.length||!symbol||!adapter)return;let disposed=false;let busy=false;
+  useEffect(()=>{const entries=bestHoursEntries;retainBestHours(scope,symbol,entries.map(entry=>entry.id));if(!entries.length||!symbol||!adapter)return;let disposed=false;let busy=false;
     const refresh=async()=>{if(busy)return;busy=true;const cutoff=isReplaying?replayCutoff:Math.floor(Date.now()/60)*60;try{const limit=Math.min(720,admin.maxBars);const values:Record<string,{analysis:BestHoursAnalysis;rows:CandleData[]}>={};for(const entry of entries){const analysisConfig={days:entry.days,open:entry.open,close:entry.close,timezone:entry.timezone,sessionSchedule:entry.sessionSchedule,sessionMinutes:entry.sessionMinutes,gapPolicy:entry.gapPolicy};const cacheKey=JSON.stringify([symbol,isReplaying?replayCutoff:"live",Math.floor(cutoff/60),limit,adapterToken,entry.id,entry.bestHoursPeriod,analysisConfig]);const snapshot=await loadBestHoursSnapshot(cacheKey,async()=>[...await adapter.marketData.getCandles({symbol,timeframe:"1h",limit,toMs:cutoff*1000})] as CandleData[],entry,entry.bestHoursPeriod,cutoff);values[entry.id]=snapshot;publishBestHours({scope,symbol,id:entry.id,analysis:snapshot.analysis,error:"",updatedAt:Date.now()});}if(!disposed)setBestHours({key:bestHoursKey,entries:values});}catch(error){const message=error instanceof Error?error.message:String(error);for(const entry of entries)publishBestHours({scope,symbol,id:entry.id,error:message,updatedAt:Date.now()});}finally{busy=false;}};
     void refresh();const timer=isReplaying?undefined:setInterval(()=>void refresh(),60000);return()=>{disposed=true;if(timer!==undefined)clearInterval(timer);};
-  },[bestHoursAnalysisKey,bestHoursKey,symbol,isReplaying,replayCutoff,adapterToken,adapter,admin.maxBars,scope]);
+  },[bestHoursEntries,bestHoursAnalysisKey,bestHoursKey,symbol,isReplaying,replayCutoff,adapterToken,adapter,admin.maxBars,scope]);
   useEffect(() => {
     const series = candleSeriesRef.current;
     if (!series) return;
