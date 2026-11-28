@@ -105,7 +105,7 @@ export class SessionCandlePrimitive extends PluginBase {
         ctx.strokeStyle=this.config.bestHoursLineColor;ctx.fillStyle=this.config.bestHoursLineColor;
         ctx.lineWidth=this.config.bestHoursLineWidth;ctx.globalAlpha=this.config.bestHoursOpacity;
         const dash=this.config.bestHoursLineStyle==="dotted"?[2,3]:this.config.bestHoursLineStyle==="dashed"?[6,4]:[];
-        for(const [index,result] of this.bestHourCache.entries()){
+        for(const result of this.bestHourCache){
           const markerX=timeX(result.time);if(markerX===null)continue;
           const future=typeof last.time==="number"&&result.time>last.time;
           if(!future&&(markerX<0||markerX>mediaSize.width))continue;

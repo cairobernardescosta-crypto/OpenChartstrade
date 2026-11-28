@@ -1,6 +1,6 @@
 import {describe,expect,it,vi} from "vitest";
 import {analyzeBestHours,loadBestHoursSnapshot} from "../lib/indicator-sdk/best-hours";
-import {resolveBestHourTimestamp} from "../lib/indicator-sdk/renderer";
+import {resolveBestHourTimestamp,resolveBestHourTimestamps} from "../lib/indicator-sdk/renderer";
 import {indicatorSchema} from "../lib/indicator-sdk/schema";
 import type {CandleData} from "../lib/indicators";
 
