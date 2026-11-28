@@ -13,6 +13,11 @@ export interface BestHourResult {
 }
 export interface BestHoursAnalysis {period:BestHoursPeriod;timezone:string;minimumObservations:number;hours:BestHourResult[];ranking:BestHourResult[];insufficient:boolean;}
 
+/** Stable key for statistical inputs; visual-only options must not trigger a new market-data fetch. */
+export function bestHoursAnalysisSignature(entries:readonly ImportedIndicator[]):string {
+ return JSON.stringify(entries.map(entry=>({id:entry.id,period:entry.bestHoursPeriod,days:entry.days,open:entry.open,close:entry.close,timezone:entry.timezone,sessionSchedule:entry.sessionSchedule,sessionMinutes:entry.sessionMinutes,gapPolicy:entry.gapPolicy})));
+}
+
 const minimums:Record<BestHoursPeriod,number>={1:1,7:3,15:5,30:8};
 const pad=(n:number)=>String(n).padStart(2,"0");
 const mean=(values:readonly number[])=>values.reduce((sum,value)=>sum+value,0)/values.length;

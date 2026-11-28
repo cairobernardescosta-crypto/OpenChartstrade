@@ -44,4 +44,22 @@ describe("linked chart configuration lifecycle",()=>{
     expect(restored.secondary[0]?.color).toBe("#222222");
     expect(restored.linked).toEqual([]);
   });
+
+  it("preserves every Best Hours visual option when linking and unlinking charts",()=>{
+    const visual={bestHoursEnabled:true,bestHoursPeriod:15 as const,bestHoursCount:1 as const,bestHoursLabels:false,bestHoursLineColor:"#123456",bestHoursLineWidth:5,bestHoursLineStyle:"solid" as const,bestHoursOpacity:0.35};
+    const primary={...definition,...visual};
+    const linked=linkedOverridesFrom("primary",{primary:[primary],secondary:[],linked:[]})[0]!;
+    expect(linked).toMatchObject(visual);
+    const split=independentOverridesFromLinked({primary:[],secondary:[],linked:[linked]});
+    expect(split.primary[0]).toMatchObject(visual);
+    expect(split.secondary[0]).toMatchObject(visual);
+    expect(split.primary[0]).not.toBe(split.secondary[0]);
+  });
+  it("keeps independent visual settings isolated between chart scopes",()=>{
+    const primary={...definition,bestHoursLineColor:"#112233",bestHoursOpacity:0.25,bestHoursLabels:false};
+    const secondary={...definition,bestHoursLineColor:"#aabbcc",bestHoursOpacity:0.9,bestHoursLabels:true};
+    const restored=validateOverrides({primary:[primary],secondary:[secondary],linked:[]});
+    expect(restored.primary[0]).toMatchObject({bestHoursLineColor:"#112233",bestHoursOpacity:0.25,bestHoursLabels:false});
+    expect(restored.secondary[0]).toMatchObject({bestHoursLineColor:"#aabbcc",bestHoursOpacity:0.9,bestHoursLabels:true});
+  });
 });

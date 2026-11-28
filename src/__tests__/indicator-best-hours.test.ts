@@ -1,5 +1,5 @@
 import {describe,expect,it,vi} from "vitest";
-import {analyzeBestHours,loadBestHoursSnapshot} from "../lib/indicator-sdk/best-hours";
+import {analyzeBestHours,bestHoursAnalysisSignature,loadBestHoursSnapshot} from "../lib/indicator-sdk/best-hours";
 import {resolveBestHourTimestamp,resolveBestHourTimestamps} from "../lib/indicator-sdk/renderer";
 import {indicatorSchema} from "../lib/indicator-sdk/schema";
 import type {CandleData} from "../lib/indicators";
@@ -42,4 +42,7 @@ describe("best trading hours",()=>{
  it("folds the repeated autumn DST hour into one daily observation",()=>{const config=indicatorSchema.parse({...base,sessionSchedule:"manual",timezone:"America/New_York",open:"00:00",close:"23:59",days:[0,1,2,3,4,5,6]});const cutoff=Date.UTC(2026,10,1,8)/1000;const rows=[bar(Date.UTC(2026,10,1,5)/1000,100,102),bar(Date.UTC(2026,10,1,6)/1000,100,104)];const result=analyzeBestHours(rows,config,1,cutoff);expect(result.hours).toHaveLength(1);expect(result.hours[0]).toMatchObject({hour:1,observations:1,mean:3});});
 
  it("projects every daily occurrence across a weekly session without duplicating the DST fallback hour",()=>{const weekStart=Date.UTC(2026,0,5,18)/1000,weekEnd=Date.UTC(2026,0,12,18)/1000;expect(resolveBestHourTimestamps(weekStart,weekEnd,10,"UTC")).toEqual(Array.from({length:7},(_,i)=>Date.UTC(2026,0,6+i,10)/1000));const fallbackStart=Date.UTC(2026,10,1,4)/1000,fallbackEnd=Date.UTC(2026,10,1,8)/1000;expect(resolveBestHourTimestamps(fallbackStart,fallbackEnd,1,"America/New_York")).toEqual([Date.UTC(2026,10,1,5)/1000]);});
+
+ it("accepts all supported visual settings without duplicating schema fields",()=>{const configured=indicatorSchema.parse({...base,bestHoursEnabled:true,bestHoursPeriod:30,bestHoursCount:1,bestHoursLabels:false,bestHoursLineColor:"#123456",bestHoursLineWidth:5,bestHoursLineStyle:"solid",bestHoursOpacity:0.4});expect(configured).toMatchObject({bestHoursEnabled:true,bestHoursPeriod:30,bestHoursCount:1,bestHoursLabels:false,bestHoursLineColor:"#123456",bestHoursLineWidth:5,bestHoursLineStyle:"solid",bestHoursOpacity:0.4});});
+ it("does not invalidate analysis when only visual settings change",()=>{const original={...base,bestHoursEnabled:true};const visualOnly={...original,bestHoursCount:1 as const,bestHoursLabels:false,bestHoursLineColor:"#123456",bestHoursLineWidth:5,bestHoursLineStyle:"solid" as const,bestHoursOpacity:0.4};expect(bestHoursAnalysisSignature([original])).toBe(bestHoursAnalysisSignature([visualOnly]));expect(bestHoursAnalysisSignature([{...visualOnly,bestHoursPeriod:15}])).not.toBe(bestHoursAnalysisSignature([visualOnly]));expect(bestHoursAnalysisSignature([{...visualOnly,timezone:"America/Sao_Paulo"}])).not.toBe(bestHoursAnalysisSignature([visualOnly]));});
 });

@@ -116,7 +116,7 @@ export class SessionCandlePrimitive extends PluginBase {
             const align=visibleX>mediaSize.width*0.72?"right":"left";
             ctx.textAlign=align;
             const labelX=align==="right"?visibleX-4:visibleX+4;
-            ctx.fillText(`${result.startLabel}–${result.endLabel} | ${result.rank}º | ${result.mean.toFixed(2)}% | ${this.bestHours.period}d`,labelX,12+index*12);
+            ctx.fillText(`${result.startLabel}–${result.endLabel} | ${result.rank}º | ${result.mean.toFixed(2)}% | ${this.bestHours.period}d`,labelX,12+(result.rank-1)*12);
           }
         }
       }
