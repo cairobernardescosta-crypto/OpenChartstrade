@@ -14,7 +14,8 @@ export function resolveBestHourTimestamps(sessionStart:number,sessionEnd:number,
   let formatter:Intl.DateTimeFormat;
   try{formatter=new Intl.DateTimeFormat("en-GB",{timeZone:timezone,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"});}catch{return [];}
   const dates=new Set<string>(),matches:number[]=[];
-  for(let timestamp=Math.ceil(sessionStart/60)*60;timestamp<sessionEnd;timestamp+=60){
+  // Modern IANA offsets and DST transitions align to quarter-hour boundaries.
+  for(let timestamp=Math.ceil(sessionStart/900)*900;timestamp<sessionEnd;timestamp+=900){
     const parts=Object.fromEntries(formatter.formatToParts(new Date(timestamp*1000)).map(part=>[part.type,part.value]));
     if(Number(parts.hour)!==hour||Number(parts.minute)!==0)continue;
     const date=String(parts.year)+"-"+String(parts.month)+"-"+String(parts.day);
