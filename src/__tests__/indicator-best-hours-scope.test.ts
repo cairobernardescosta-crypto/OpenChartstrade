@@ -17,10 +17,11 @@ afterEach(()=>{
 
 describe("Best Hours independent chart scopes",()=>{
   it("keeps statuses isolated when both charts use the same symbol and indicator",()=>{
-    publishBestHours({scope:"primary",symbol,id,analysis,error:"",updatedAt:1});
-    publishBestHours({scope:"secondary",symbol,id,analysis,error:"",updatedAt:2});
-
     const {result}=renderHook(()=>useBestHoursStatuses());
+    act(()=>{
+      publishBestHours({scope:"primary",symbol,id,analysis,error:"",updatedAt:1});
+      publishBestHours({scope:"secondary",symbol,id,analysis,error:"",updatedAt:2});
+    });
     expect(result.current.filter(row=>row.symbol===symbol&&row.id===id)).toHaveLength(2);
     expect(result.current.find(row=>row.scope==="primary")?.updatedAt).toBe(1);
     expect(result.current.find(row=>row.scope==="secondary")?.updatedAt).toBe(2);
@@ -40,15 +41,15 @@ describe("Best Hours independent chart scopes",()=>{
     expect(remaining[0]).toMatchObject({scope:"secondary",updatedAt:2,error:""});
   });
 
-  it("retains another symbol independently within the same chart scope",()=>{
+  it("does not overwrite a different symbol in the same chart scope",()=>{
     const otherSymbol="phase5:xyz:ETH";
     const {result}=renderHook(()=>useBestHoursStatuses());
     act(()=>{
       publishBestHours({scope:"primary",symbol,id,analysis,error:"",updatedAt:1});
       publishBestHours({scope:"primary",symbol:otherSymbol,id,analysis,error:"",updatedAt:2});
-      retainBestHours("primary",symbol,[]);
     });
-    expect(result.current.some(row=>row.symbol===otherSymbol&&row.id===id)).toBe(true);
-    act(()=>retainBestHours("primary",otherSymbol,[]));
+    expect(result.current.filter(row=>row.scope==="primary"&&row.id===id)).toHaveLength(2);
+    act(()=>retainBestHours("primary",otherSymbol,[id]));
+    expect(result.current.filter(row=>row.scope==="primary"&&row.id===id).map(row=>row.symbol)).toEqual([otherSymbol]);
   });
 });
