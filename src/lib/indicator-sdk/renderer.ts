@@ -9,16 +9,22 @@ import type {BestHoursAnalysis} from "./best-hours";
 /** Resolve a wall-clock hour to its real timestamp inside the active session.
  * Minute-by-minute lookup respects IANA timezone offsets and naturally skips DST gaps.
  */
-export function resolveBestHourTimestamp(sessionStart:number,sessionEnd:number,hour:number,timezone:string):number|null {
-  if(!Number.isFinite(sessionStart)||!Number.isFinite(sessionEnd)||sessionEnd<=sessionStart||!Number.isInteger(hour)||hour<0||hour>23)return null;
+export function resolveBestHourTimestamps(sessionStart:number,sessionEnd:number,hour:number,timezone:string):number[] {
+  if(!Number.isFinite(sessionStart)||!Number.isFinite(sessionEnd)||sessionEnd<=sessionStart||!Number.isInteger(hour)||hour<0||hour>23)return [];
   let formatter:Intl.DateTimeFormat;
-  try{formatter=new Intl.DateTimeFormat("en-GB",{timeZone:timezone,hour:"2-digit",minute:"2-digit",hourCycle:"h23"});}catch{return null;}
-  // A repeated wall-clock hour at the autumn DST transition resolves to its first real occurrence.
+  try{formatter=new Intl.DateTimeFormat("en-GB",{timeZone:timezone,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"});}catch{return [];}
+  const dates=new Set<string>(),matches:number[]=[];
   for(let timestamp=Math.ceil(sessionStart/60)*60;timestamp<sessionEnd;timestamp+=60){
     const parts=Object.fromEntries(formatter.formatToParts(new Date(timestamp*1000)).map(part=>[part.type,part.value]));
-    if(Number(parts.hour)===hour&&Number(parts.minute)===0)return timestamp;
+    if(Number(parts.hour)!==hour||Number(parts.minute)!==0)continue;
+    const date=String(parts.year)+"-"+String(parts.month)+"-"+String(parts.day);
+    if(dates.has(date))continue;
+    dates.add(date);matches.push(timestamp);
   }
-  return null;
+  return matches;
+}
+export function resolveBestHourTimestamp(sessionStart:number,sessionEnd:number,hour:number,timezone:string):number|null {
+  return resolveBestHourTimestamps(sessionStart,sessionEnd,hour,timezone)[0]??null;
 }
 
 export class SessionCandlePrimitive extends PluginBase {
@@ -26,7 +32,7 @@ export class SessionCandlePrimitive extends PluginBase {
   private timer:ReturnType<typeof setInterval>|undefined;
   private readonly view: ISeriesPrimitivePaneView;
   private bestHourCacheKey="";
-  private bestHourCache:Array<{hour:number;time:number;startLabel:string;endLabel:string;mean:number}>=[];
+  private bestHourCache:Array<{hour:number;time:number;startLabel:string;endLabel:string;mean:number;rank:number}>=[];
   constructor(private readonly config:ImportedIndicator,private readonly sourceSeconds=60,private readonly maxBars=5000,private readonly replayData?:readonly import("lightweight-charts").CandlestickData<Time>[],private readonly independentData?:readonly CandleData[],private readonly independentSeconds=60,private readonly bestHours?:BestHoursAnalysis,_bestHourCandles:readonly CandleData[]=[]) {
     super();
     this.view={renderer:()=>({draw:(target:CanvasRenderingTarget2D)=>this.draw(target)} satisfies ISeriesPrimitivePaneRenderer)};
@@ -89,12 +95,11 @@ export class SessionCandlePrimitive extends PluginBase {
         if(cacheKey!==this.bestHourCacheKey){
           this.bestHourCacheKey=cacheKey;
           const seen=new Set<number>();
-          this.bestHourCache=ranked.flatMap(row=>{
-            const time=resolveBestHourTimestamp(sessionStart,sessionEnd,row.hour,this.config.timezone);
-            if(time===null||seen.has(time))return [];
+          this.bestHourCache=ranked.flatMap((row,index)=>resolveBestHourTimestamps(sessionStart,sessionEnd,row.hour,this.config.timezone).flatMap(time=>{
+            if(seen.has(time))return [];
             seen.add(time);
-            return [{hour:row.hour,time,startLabel:row.startLabel,endLabel:row.endLabel,mean:row.mean}];
-          });
+            return [{hour:row.hour,time,startLabel:row.startLabel,endLabel:row.endLabel,mean:row.mean,rank:index+1}];
+          }));
         }
         ctx.strokeStyle=this.config.bestHoursLineColor;ctx.fillStyle=this.config.bestHoursLineColor;
         ctx.lineWidth=this.config.bestHoursLineWidth;ctx.globalAlpha=this.config.bestHoursOpacity;
@@ -110,7 +115,7 @@ export class SessionCandlePrimitive extends PluginBase {
             const align=visibleX>mediaSize.width*0.72?"right":"left";
             ctx.textAlign=align;
             const labelX=align==="right"?visibleX-4:visibleX+4;
-            ctx.fillText(`${result.startLabel}–${result.endLabel} | ${index+1}º | ${result.mean.toFixed(2)}% | ${this.bestHours.period}d`,labelX,12+index*12);
+            ctx.fillText(`${result.startLabel}–${result.endLabel} | ${result.rank}º | ${result.mean.toFixed(2)}% | ${this.bestHours.period}d`,labelX,12+index*12);
           }
         }
       }
