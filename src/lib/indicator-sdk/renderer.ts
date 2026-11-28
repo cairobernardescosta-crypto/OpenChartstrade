@@ -6,11 +6,26 @@ import { sessionRange, sessionPeriodLabel, projectedCandleX, type SessionRange }
 import type { CandleData } from "../indicators";
 import type {BestHoursAnalysis} from "./best-hours";
 
+/** Resolve a wall-clock hour to its real timestamp inside the active session.
+ * Minute-by-minute lookup respects IANA timezone offsets and naturally skips DST gaps.
+ */
+export function resolveBestHourTimestamp(sessionStart:number,sessionEnd:number,hour:number,timezone:string):number|null {
+  if(!Number.isFinite(sessionStart)||!Number.isFinite(sessionEnd)||sessionEnd<=sessionStart||!Number.isInteger(hour)||hour<0||hour>23)return null;
+  const formatter=new Intl.DateTimeFormat("en-GB",{timeZone:timezone,hour:"2-digit",minute:"2-digit",hourCycle:"h23"});
+  for(let timestamp=Math.ceil(sessionStart/60)*60;timestamp<sessionEnd;timestamp+=60){
+    const parts=Object.fromEntries(formatter.formatToParts(new Date(timestamp*1000)).map(part=>[part.type,part.value]));
+    if(Number(parts.hour)===hour&&Number(parts.minute)===0)return timestamp;
+  }
+  return null;
+}
+
 export class SessionCandlePrimitive extends PluginBase {
   private range: SessionRange|null=null;
   private timer:ReturnType<typeof setInterval>|undefined;
   private readonly view: ISeriesPrimitivePaneView;
-  constructor(private readonly config:ImportedIndicator,private readonly sourceSeconds=60,private readonly maxBars=5000,private readonly replayData?:readonly import("lightweight-charts").CandlestickData<Time>[],private readonly independentData?:readonly CandleData[],private readonly independentSeconds=60,private readonly bestHours?:BestHoursAnalysis,private readonly bestHourCandles:readonly CandleData[]=[]) {
+  private bestHourCacheKey="";
+  private bestHourCache:Array<{hour:number;time:number;startLabel:string;endLabel:string;mean:number}>=[];
+  constructor(private readonly config:ImportedIndicator,private readonly sourceSeconds=60,private readonly maxBars=5000,private readonly replayData?:readonly import("lightweight-charts").CandlestickData<Time>[],private readonly independentData?:readonly CandleData[],private readonly independentSeconds=60,private readonly bestHours?:BestHoursAnalysis,_bestHourCandles:readonly CandleData[]=[]) {
     super();
     this.view={renderer:()=>({draw:(target:CanvasRenderingTarget2D)=>this.draw(target)} satisfies ISeriesPrimitivePaneRenderer)};
   }
@@ -34,7 +49,21 @@ export class SessionCandlePrimitive extends PluginBase {
     const rangeLastX=rangeLast?scale.timeToCoordinate(rangeLast.time):null;
     const yO=this.series.priceToCoordinate(r.open), yC=this.series.priceToCoordinate(r.close), yH=this.series.priceToCoordinate(r.high), yL=this.series.priceToCoordinate(r.low);
     if(yO===null||yC===null||yH===null||yL===null)return;
-    const timeX=(t:number)=>{const direct=scale.timeToCoordinate(t as Time);if(direct!==null)return direct;const prev=data[data.length-2];const interval=prev?this.sourceSeconds:0;return interval>0&&typeof last.time==="number"?xLast+(t-last.time)/interval*step:null;};
+    const numericData=data.flatMap(bar=>typeof bar.time==="number"?[{time:bar.time}]:[]);
+    const timeX=(t:number)=>{
+      const direct=scale.timeToCoordinate(t as Time);if(direct!==null)return direct;
+      const upper=numericData.findIndex(bar=>bar.time>t);
+      if(upper>0){
+        const left=numericData[upper-1]!,right=numericData[upper]!;
+        const leftX=scale.timeToCoordinate(left.time as Time),rightX=scale.timeToCoordinate(right.time as Time);
+        if(leftX!==null&&rightX!==null&&right.time>left.time)return leftX+(rightX-leftX)*(t-left.time)/(right.time-left.time);
+      }
+      const first=numericData[0],lastNumeric=numericData[numericData.length-1];
+      if(!first||!lastNumeric||this.sourceSeconds<=0)return null;
+      if(t<first.time){const firstX=scale.timeToCoordinate(first.time as Time);return firstX===null?null:firstX+(t-first.time)/this.sourceSeconds*step;}
+      if(t>lastNumeric.time){const lastX=scale.timeToCoordinate(lastNumeric.time as Time);return lastX===null?null:lastX+(t-lastNumeric.time)/this.sourceSeconds*step;}
+      return null;
+    };
     target.useMediaCoordinateSpace(({context:ctx,mediaSize})=>{
       const closeX=timeX(r.sessionEnd??r.end);
       const anchorX=rangeLastX??(this.independentData?timeX(this.independentData[this.independentData.length-1]?.time??r.start):null);
@@ -51,7 +80,35 @@ export class SessionCandlePrimitive extends PluginBase {
       if(showProjected&&this.config.showCandle&&this.config.showWicks)line(x,yH,x,yL);
       if(showProjected&&this.config.showCandle)ctx.fillRect(x-this.config.width/2,Math.min(yO,yC),this.config.width,Math.max(1,Math.abs(yO-yC)));
       if(showProjected&&this.config.showLabels){const label=sessionPeriodLabel(this.config)+(r.closed?"":" · partial");ctx.font="11px sans-serif";ctx.textAlign="center";ctx.fillText(label,x,yH-7);ctx.fillText(label,x,yL+14);}
-      if(this.config.bestHoursEnabled&&this.bestHours){const ranked=this.bestHours.ranking.slice(0,this.config.bestHoursCount);const formatter=new Intl.DateTimeFormat("en-GB",{timeZone:this.config.timezone,hour:"2-digit",hourCycle:"h23"});const sessionStart=r.sessionStart??r.start,sessionEnd=r.sessionEnd??r.end;ctx.strokeStyle=this.config.bestHoursLineColor;ctx.fillStyle=this.config.bestHoursLineColor;ctx.lineWidth=this.config.bestHoursLineWidth;ctx.globalAlpha=this.config.bestHoursOpacity;const dash=this.config.bestHoursLineStyle==="dotted"?[2,3]:this.config.bestHoursLineStyle==="dashed"?[6,4]:[];for(const [index,result] of ranked.entries()){const candle=this.bestHourCandles.find(row=>row.time>=sessionStart&&row.time+3600<=sessionEnd&&Number(formatter.format(new Date(row.time*1000)))===result.hour);if(!candle)continue;const startX=timeX(Math.max(candle.time,sessionStart)),endX=timeX(Math.min(candle.time+3600,sessionEnd)),priceY=this.series.priceToCoordinate(candle.open);if(startX===null||endX===null||priceY===null)continue;line(startX,priceY,endX,priceY,dash);if(this.config.bestHoursLabels){ctx.font="10px sans-serif";ctx.textAlign="left";ctx.fillText(`${result.startLabel}–${result.endLabel} | ${index+1}º | ${result.mean.toFixed(2)}% | ${this.bestHours.period}d`,Math.max(2,startX+3),priceY-4);}}}
+      if(this.config.bestHoursEnabled&&this.bestHours){
+        const ranked=this.bestHours.ranking.slice(0,this.config.bestHoursCount);
+        const sessionStart=r.sessionStart??r.start,sessionEnd=r.sessionEnd??r.end;
+        const cacheKey=JSON.stringify([sessionStart,sessionEnd,this.config.timezone,ranked.map(row=>[row.hour,row.startLabel,row.endLabel,row.mean])]);
+        if(cacheKey!==this.bestHourCacheKey){
+          this.bestHourCacheKey=cacheKey;
+          this.bestHourCache=ranked.flatMap(row=>{
+            const time=resolveBestHourTimestamp(sessionStart,sessionEnd,row.hour,this.config.timezone);
+            return time===null?[]:[{hour:row.hour,time,startLabel:row.startLabel,endLabel:row.endLabel,mean:row.mean}];
+          });
+        }
+        ctx.strokeStyle=this.config.bestHoursLineColor;ctx.fillStyle=this.config.bestHoursLineColor;
+        ctx.lineWidth=this.config.bestHoursLineWidth;ctx.globalAlpha=this.config.bestHoursOpacity;
+        const dash=this.config.bestHoursLineStyle==="dotted"?[2,3]:this.config.bestHoursLineStyle==="dashed"?[6,4]:[];
+        for(const [index,result] of this.bestHourCache.entries()){
+          const markerX=timeX(result.time);if(markerX===null)continue;
+          const future=typeof last.time==="number"&&result.time>last.time;
+          if(!future&&(markerX<0||markerX>mediaSize.width))continue;
+          const visibleX=Math.max(0,Math.min(mediaSize.width-1,markerX));
+          line(visibleX,0,visibleX,mediaSize.height,dash);
+          if(this.config.bestHoursLabels){
+            ctx.font="10px sans-serif";
+            const align=visibleX>mediaSize.width*0.72?"right":"left";
+            ctx.textAlign=align;
+            const labelX=align==="right"?visibleX-4:visibleX+4;
+            ctx.fillText(`${result.startLabel}–${result.endLabel} | ${index+1}º | ${result.mean.toFixed(2)}% | ${this.bestHours.period}d`,labelX,12+index*12);
+          }
+        }
+      }
       ctx.restore();
     });
   }
